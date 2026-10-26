@@ -87,7 +87,7 @@ Four levels in Settings > Animations: *Don't distract me*, *Just a little bit*, 
 ## Quick start
 
 ```bash
-git clone https://github.com/nottwm/makdown MakDown
+git clone https://github.com/nottwm/MakDown MakDown
 cd MakDown
 ./scripts/check-deps.sh      # sanity-check your toolchain
 make unx

@@ -1,0 +1,2 @@
+// makdown.rc - Windows resources: the exe/taskbar icon. Compiled with windres from the project root (see Makefile).
+1 ICON "assets/icon.ico"

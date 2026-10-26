@@ -1,0 +1,14 @@
+// Example custom preset. Copy to your presets folder (see Documentation/presets.md) and restart MakDown,
+// or just use Settings -> Appearance -> Clone... which writes a file like this for you.
+{
+  "name": "Example Sunset",
+  "builtin": false,
+  "dark": true,
+  "chrome": "plain",             // github | win11 | terminal | warm | plain
+  "colors": { "bg": "#1b1423", "panel": "#251a30", "fg": "#f2e9f7", "muted": "#9a86a8", "border": "#3a2a4a",
+              "accent": "#ff8a5b", "accentFg": "#1b1423", "codeBg": "#120d19", "codeFg": "#ffd59e" },
+  "fonts":  { "ui": "Segoe UI, sans-serif", "uiSize": 10, "editor": "JetBrains Mono, monospace", "editorSize": 11,
+              "preview": "Georgia, serif", "previewSize": 12, "code": "monospace", "codeScalePercent": 90 },
+  "shape":  { "cornerRadius": 12, "codeBorder": true, "codeLanguageLabel": true, "headingRules": false, "pageWidth": 820 }
+  // missing colour keys are derived automatically
+}

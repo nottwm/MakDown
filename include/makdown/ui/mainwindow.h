@@ -5,6 +5,7 @@
 #include <QTimer>
 #include <makdown/core/syntax.h>
 #include <makdown/core/theme.h>
+#include <makdown/arch/platform.h>
 
 class MarkdownEditor;
 class FileExplorer;
@@ -12,6 +13,8 @@ class BrowserTab;
 class ConsolePanel;
 class FindBar;
 class Sidebar;
+class TitleBar;
+class FrameBorder;
 class QVariantAnimation;
 class QLabel; class QLineEdit; class QSplitter; class QFrame; class QAction; class QActionGroup; class QWidget; class QTabWidget;
 
@@ -30,13 +33,17 @@ private:
 class MainWindow : public QMainWindow {
     Q_OBJECT
 public:
-    explicit MainWindow(const QString& fileToOpen = QString());
+    // nativeFrame = true (--native-frame) keeps the OS title bar + border whatever the setting says.
+    explicit MainWindow(const QString& fileToOpen = QString(), bool nativeFrame = false);
 
 protected:
     void closeEvent(QCloseEvent* e) override;
     void showEvent(QShowEvent* e) override;
     void dragEnterEvent(QDragEnterEvent* e) override;
     void dropEvent(QDropEvent* e) override;
+    void changeEvent(QEvent* e) override;                 // focus / maximise -> window border + caption buttons
+    void resizeEvent(QResizeEvent* e) override;           // keeps the border overlay on the window
+    bool nativeEvent(const QByteArray& type, void* message, platform::NativeResult* result) override;   // custom frame hit-testing
 
 private:
     // ---- construction
@@ -81,6 +88,11 @@ private:
     void revealSidebar();                    // make sure the left panel is visible
     void openFileAt(const QString& path, int line, int col, int len);   // open a text file and select a match
     void openGitTab();                           // sidebar > Git (clone a repository)
+    // ---- custom window frame (Windows; see Documentation/window-frame.md)
+    void applyFrame();                           // settings + theme -> custom frame on/off, caption colours, border
+    void setCustomFrame(bool on);                // swaps the native frame for ours (re-creates the native window)
+    void updateFrameState();                     // border visibility / colours, maximise glyph
+    bool isCaptionAt(const QPoint& p) const;     // p in window coordinates: is it the draggable title area?
     // ---- misc
     void openSettings();
     void showAbout();
@@ -121,4 +133,9 @@ private:
     int explorerW_ = 300, consoleH_ = 240;
     QVariantAnimation *explorerAnim_ = nullptr, *consoleAnim_ = nullptr;
     QString appliedTheme_;
+    TitleBar* titleBar_ = nullptr;               // menu bar + (custom frame) icon and caption buttons
+    FrameBorder* frameBorder_ = nullptr;         // themed window border painted over everything
+    bool frameCustom_ = false;                   // the custom frame is active right now
+    bool forceNativeFrame_ = false;              // --native-frame
+    bool settingsOpen_ = false;                  // frame switch is postponed while the modal Settings dialog is up
 };

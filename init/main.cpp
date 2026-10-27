@@ -1,5 +1,5 @@
 // main.cpp - entry point. Handles command line flags, debug banner and starts the Qt event loop.
-//   makdown [file.md] [--debug] [--help] [--version]
+//   makdown [file.md] [--debug] [--native-frame] [--help] [--version]
 #include <QApplication>
 #include <QStringList>
 #include <cstdio>
@@ -13,13 +13,15 @@
 
 int main(int argc, char** argv) {
     // ---- tiny argument parser (before Qt starts, so --help is instant)
-    bool debug = false; QString file;
+    bool debug = false, nativeFrame = false; QString file;
     for (int i = 1; i < argc; ++i) {
         const char* a = argv[i];
         if (!std::strcmp(a, "--debug") || !std::strcmp(a, "-d")) debug = true;
+        else if (!std::strcmp(a, "--native-frame")) nativeFrame = true;
         else if (!std::strcmp(a, "--help") || !std::strcmp(a, "-h")) {
-            std::puts("MakDown - markdown editor, but fancier\n\nusage: makdown [file.md] [--debug] [--version]\n"
-                      "  --debug, -d    print compiler / build date / architecture and verbose logs to the console");
+            std::puts("MakDown - markdown editor, but fancier\n\nusage: makdown [file.md] [--debug] [--native-frame] [--version]\n"
+                      "  --debug, -d      print compiler / build date / architecture and verbose logs to the console\n"
+                      "  --native-frame   use the OS title bar and border (Windows) instead of MakDown's themed ones");
             return 0;
         }
         else if (!std::strcmp(a, "--version")) { std::puts("MakDown 1.0"); return 0; }
@@ -46,7 +48,7 @@ int main(int argc, char** argv) {
         mdLog("syntax folder : " + SyntaxStore::syntaxDir());
     }
 
-    MainWindow w(file);
+    MainWindow w(file, nativeFrame);
     w.show();
     return app.exec();
 }

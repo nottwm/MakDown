@@ -12,6 +12,8 @@
 #include <makdown/ui/searchtab.h>
 #include <makdown/ui/sidebar.h>
 #include <makdown/ui/mediatab.h>
+#include <makdown/ui/titlebar.h>
+#include <makdown/arch/platform.h>
 #include <makdown/ui/fx.h>
 #include <makdown/core/anim.h>
 #include <QPainter>
@@ -127,7 +129,7 @@ void PreviewBrowser::applyMargins() {
 // ---------------------------------------------------------------------------------------------
 // construction
 // ---------------------------------------------------------------------------------------------
-MainWindow::MainWindow(const QString& fileToOpen) {
+MainWindow::MainWindow(const QString& fileToOpen, bool nativeFrame) : forceNativeFrame_(nativeFrame) {
     s_.load();
     ThemeStore::ensureStock();
     themes_ = ThemeStore::loadAll();
@@ -267,6 +269,8 @@ void MainWindow::buildUi() {
     vsplit_->setStretchFactor(0, 1); vsplit_->setStretchFactor(1, 0);
     v->addWidget(vsplit_, 1);
     setCentralWidget(central);
+    frameBorder_ = new FrameBorder(this);        // themed custom-frame border; hidden unless the custom frame is on
+    frameBorder_->hide();
     fx::smoothScroll(editor_); fx::smoothScroll(preview_);       // glide on the wheel at "Entertain me"
 
     // status bar: [vim mode]  ...........  Ln/Col   words   theme
@@ -303,6 +307,13 @@ void MainWindow::buildUi() {
 }
 
 void MainWindow::buildMenus() {
+    // The menu bar lives inside the title bar (so the custom frame can put the caption buttons on the same row).
+    // QMainWindow::setMenuWidget() must come first: calling menuBar() afterwards would replace the title bar.
+    titleBar_ = new TitleBar(this);
+    setMenuWidget(titleBar_);
+    connect(titleBar_->minimizeButton(), &QAbstractButton::clicked, this, &QWidget::showMinimized);
+    connect(titleBar_->maximizeButton(), &QAbstractButton::clicked, this, [this] { isMaximized() ? showNormal() : showMaximized(); });
+    connect(titleBar_->closeButton(), &QAbstractButton::clicked, this, &QWidget::close);
     // tiny helper: add an action with optional shortcut and handler
     auto add = [this](QMenu* m, const QString& text, const QKeySequence& key, auto fn) {
         QAction* a = m->addAction(text); if (!key.isEmpty()) a->setShortcut(key);
@@ -315,7 +326,7 @@ void MainWindow::buildMenus() {
         return a;
     };
 
-    QMenu* file = menuBar()->addMenu("&File");
+    QMenu* file = titleBar_->menuBar()->addMenu("&File");
     add(file, "&New", QKeySequence::New, [this] { newFile(); });
     add(file, "&Open...", QKeySequence::Open, [this] {
         const QString p = QFileDialog::getOpenFileName(this, "Open file", QString(), "Markdown (*.md *.markdown *.txt);;Images and sound (*.png *.jpg *.jpeg *.gif *.bmp *.webp *.ico *.mp3 *.wav *.ogg *.opus *.flac *.m4a *.aac);;Web files (*.html *.htm *.css *.js);;Source code (*.c *.h *.cpp *.hpp *.rs *.sh *.bat *.cmd *.ld *.mk Makefile);;All files (*)");
@@ -329,7 +340,7 @@ void MainWindow::buildMenus() {
     file->addSeparator();
     add(file, "&Quit", QKeySequence::Quit, [this] { close(); });
 
-    QMenu* edit = menuBar()->addMenu("&Edit");
+    QMenu* edit = titleBar_->menuBar()->addMenu("&Edit");
     add(edit, "&Undo", QKeySequence::Undo, [this] { editor_->undo(); });
     add(edit, "&Redo", QKeySequence::Redo, [this] { editor_->redo(); });
     edit->addSeparator();
@@ -346,7 +357,7 @@ void MainWindow::buildMenus() {
     add(edit, "Quote", QKeySequence("Ctrl+Shift+9"), [this] { editor_->toggleLinePrefix("> "); });
 
     // Search: with vim keys off Ctrl+F / Ctrl+H / F3 drive the VS Code style find bar; with vim keys on Ctrl+F opens the "/" line
-    QMenu* srch = menuBar()->addMenu("&Search");
+    QMenu* srch = titleBar_->menuBar()->addMenu("&Search");
     add(srch, "&Find", QKeySequence::Find, [this] {
         if (!editorPane_->isVisible()) return;
         if (s_.vim) showCommandLine("/"); else findBar_->open(false);
@@ -362,7 +373,7 @@ void MainWindow::buildMenus() {
         openSearchTab(sel);
     });
 
-    QMenu* view = menuBar()->addMenu("&View");
+    QMenu* view = titleBar_->menuBar()->addMenu("&View");
     auto* group = new QActionGroup(this);
     auto mkView = [&](const QString& text, const QString& key, int mode) {
         QAction* a = view->addAction(text); a->setCheckable(true); a->setShortcut(QKeySequence(key)); group->addAction(a);
@@ -384,19 +395,19 @@ void MainWindow::buildMenus() {
     add(view, "Refresh preview", QKeySequence(Qt::Key_F5), [this] { renderPreview(); });
     add(view, "Full screen", QKeySequence(Qt::Key_F11), [this] { isFullScreen() ? showNormal() : showFullScreen(); });
 
-    QMenu* web = menuBar()->addMenu("&Browser");
+    QMenu* web = titleBar_->menuBar()->addMenu("&Browser");
     add(web, "Open page in &browser tab", QKeySequence("Ctrl+Shift+B"), [this] { openInBrowser(); });
     add(web, "&New browser tab", QKeySequence("Ctrl+T"), [this] { newBrowserTab(); });
     web->addSeparator();
     actLive_ = check(web, "&Live reload (watches .html / .js / .css)", QKeySequence(), &s_.liveReload, [] {});
 
-    QMenu* git = menuBar()->addMenu("&Git");
+    QMenu* git = titleBar_->menuBar()->addMenu("&Git");
     add(git, "&Clone repository...", QKeySequence("Ctrl+Shift+G"), [this] { openGitTab(); });
 
-    QMenu* set = menuBar()->addMenu("&Settings");
+    QMenu* set = titleBar_->menuBar()->addMenu("&Settings");
     add(set, "&Preferences...", QKeySequence("Ctrl+,"), [this] { openSettings(); });
 
-    QMenu* help = menuBar()->addMenu("&Help");
+    QMenu* help = titleBar_->menuBar()->addMenu("&Help");
     add(help, "&About MakDown", QKeySequence(), [this] { showAbout(); });
     add(help, "&Build info", QKeySequence(), [this] { QMessageBox::information(this, "Build info", makdownBuildInfo()); });
 }
@@ -563,6 +574,7 @@ void MainWindow::applyAll() {
     setViewMode(s_.viewMode);
     renderPreview();
     updateStatus();
+    applyFrame();
 }
 
 void MainWindow::syncActions() {            // menu check marks follow AppSettings (without re-triggering)
@@ -698,8 +710,71 @@ void MainWindow::showEvent(QShowEvent* e) {
     shown_ = true;
     if (Anim::level() >= Anim::Normal) {         // the window fades in
         setWindowOpacity(0.0);
-        fx::tween(this, 0, 100, 260, [this](int v) { setWindowOpacity(v / 100.0); }, {}, false, Anim::Normal);
+        fx::tween(this, 0, 100, 260, [this](int v) { setWindowOpacity(v / 100.0); },
+                  [this] { if (frameCustom_) platform::syncFrame(this); }, false, Anim::Normal);   // layered while fading: restore the shadow
     }
+    if (frameCustom_) { platform::syncFrame(this); updateFrameState(); }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Custom window frame: our own title bar + themed border instead of the OS ones (Windows).
+// platform::* keeps resize / snap / shadow native; this part decides what is drawn.
+// ---------------------------------------------------------------------------------------------
+void MainWindow::applyFrame() {
+    if (!titleBar_) return;
+    if (!settingsOpen_)           // never recreate the native window under a modal dialog: switch when it closes
+        setCustomFrame(platform::customFrameSupported() && s_.customFrame && !forceNativeFrame_);
+    titleBar_->applyTheme(theme_);
+    if (frameCustom_) platform::setFrameAppearance(this, theme_.dark);
+    updateFrameState();
+}
+
+void MainWindow::setCustomFrame(bool on) {
+    if (on == frameCustom_) return;
+    frameCustom_ = on;
+    const bool wasVisible = isVisible(), wasMaximized = isMaximized();
+    if (on) platform::installCustomFrame(this, [this](const QPoint& p) { return isCaptionAt(p); });
+    else    platform::removeCustomFrame(this);
+    titleBar_->setCustomFrame(on);
+    if (wasVisible) { if (wasMaximized) showMaximized(); else show(); }      // changing window flags hid it
+    mdLog(QString("window frame: %1").arg(on ? "custom" : "native"));
+}
+
+void MainWindow::updateFrameState() {
+    if (!frameBorder_) return;
+    const bool border = frameCustom_ && !isMaximized() && !isFullScreen() && theme_.frameWidth > 0;
+    frameBorder_->setStyle(theme_.frameWidth, QColor(theme_.color("frameBorder")),
+                           QColor(theme_.color("frameBorderInactive")), platform::frameCornerRadius());
+    frameBorder_->setActive(isActiveWindow());
+    frameBorder_->setGeometry(rect());
+    frameBorder_->setVisible(border);
+    if (border) frameBorder_->raise();
+    if (titleBar_) titleBar_->setMaximized(isMaximized());
+}
+
+bool MainWindow::isCaptionAt(const QPoint& p) const {          // the empty parts of the title bar move the window
+    if (!titleBar_ || !titleBar_->isVisible()) return false;
+    const QPoint tp = titleBar_->mapFrom(this, p);
+    if (!titleBar_->rect().contains(tp)) return false;
+    const QWidget* c = titleBar_->childAt(tp);                   // menus, caption buttons: ordinary clicks
+    return !c || c->property("dragRegion").toBool();
+}
+
+bool MainWindow::nativeEvent(const QByteArray& type, void* message, platform::NativeResult* result) {
+    if (frameCustom_ && platform::frameNativeEvent(this, type, message, result)) return true;
+    return QMainWindow::nativeEvent(type, message, result);
+}
+
+void MainWindow::changeEvent(QEvent* e) {
+    QMainWindow::changeEvent(e);
+    if (e->type() != QEvent::ActivationChange && e->type() != QEvent::WindowStateChange) return;
+    if (frameCustom_ && e->type() == QEvent::WindowStateChange) platform::syncFrame(this);
+    updateFrameState();
+}
+
+void MainWindow::resizeEvent(QResizeEvent* e) {
+    QMainWindow::resizeEvent(e);
+    if (frameBorder_) frameBorder_->setGeometry(rect());
 }
 
 void MainWindow::showExplorer(bool on) {
@@ -802,8 +877,10 @@ void MainWindow::dropEvent(QDropEvent* e) {
 void MainWindow::openSettings() {
     SettingsDialog dlg(s_, themes_, this);
     connect(&dlg, &SettingsDialog::applied, this, [this] { applyAll(); s_.save(); });   // live preview of every change
+    settingsOpen_ = true;
     dlg.exec();
-    applyAll();
+    settingsOpen_ = false;
+    applyAll();                  // also performs a pending custom <-> native frame switch
 }
 
 void MainWindow::showAbout() {

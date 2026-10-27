@@ -1,6 +1,7 @@
 // settingsdialog.cpp - sidebar-style settings: Appearance (themes + custom editor), Editor, Preview, About.
 #include <makdown/ui/settingsdialog.h>
 #include <makdown/core/buildinfo.h>
+#include <makdown/arch/platform.h>
 
 #include <QCheckBox>
 #include <QColorDialog>
@@ -109,6 +110,11 @@ QWidget* SettingsDialog::buildAppearancePage() {
     connect(newBtn_, &QPushButton::clicked, this, [this] { createTheme(false); });
     connect(delBtn_, &QPushButton::clicked, this, [this] { deleteCurrent(); });
 
+    if (platform::customFrameSupported())
+        addCheck(v, "Custom window frame", "MakDown draws its own title bar and a themed window border instead of the Windows ones. "
+                    "Resizing, snapping and the shadow stay native. Turn off to get the standard Windows frame "
+                    "(takes effect when you close Settings).", &s_.customFrame);
+
     // colour swatch strip (quick visual summary of the selected theme)
     swatches_ = new QFrame; swatches_->setObjectName("swatches");
     auto* sw = new QHBoxLayout(swatches_); sw->setContentsMargins(0, 4, 0, 4); sw->setSpacing(6);
@@ -166,6 +172,11 @@ QWidget* SettingsDialog::buildAppearancePage() {
     form->addRow("UI corner radius", rh);
     connect(radius_, &QSlider::valueChanged, this, [this](int n) { radiusVal_->setText(QString::number(n) + " px"); edit([=](Theme& t) { t.radius = n; }); });
 
+    if (platform::customFrameSupported()) {
+        frameWidth_ = new QSpinBox; frameWidth_->setRange(0, 6); frameWidth_->setSuffix(" px"); frameWidth_->setSpecialValueText("None");
+        form->addRow("Window border", frameWidth_);
+        connect(frameWidth_, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int n) { edit([=](Theme& t) { t.frameWidth = n; }); });
+    }
     pageWidth_ = new QSpinBox; pageWidth_->setRange(480, 1800); pageWidth_->setSingleStep(20); pageWidth_->setSuffix(" px");
     form->addRow("Document width", pageWidth_);
     connect(pageWidth_, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int n) { edit([=](Theme& t) { t.pageWidth = n; }); });
@@ -292,6 +303,7 @@ void SettingsDialog::loadThemeIntoControls() {
     codeFontBox_->setCurrentFont(QFont(first(t->codeFont))); codeScale_->setValue(t->codeFontScale);
     radius_->setValue(t->radius); radiusVal_->setText(QString::number(t->radius) + " px");
     pageWidth_->setValue(t->pageWidth);
+    if (frameWidth_) frameWidth_->setValue(t->frameWidth);
     codeBorder_->setChecked(t->codeBorder); codeLabel_->setChecked(t->codeLangLabel); headRules_->setChecked(t->headingRules);
     for (const QString& k : ThemeStore::colorKeys()) paintColorButton(k);
     refreshSwatches();

@@ -48,7 +48,7 @@ private:
     QGroupBox* customBox_ = nullptr;
     QComboBox* chromeCombo_ = nullptr;
     QFontComboBox *uiFontBox_ = nullptr, *edFontBox_ = nullptr, *pvFontBox_ = nullptr, *codeFontBox_ = nullptr;
-    QSpinBox *uiSize_ = nullptr, *edSize_ = nullptr, *pvSize_ = nullptr, *codeScale_ = nullptr, *pageWidth_ = nullptr;
+    QSpinBox *uiSize_ = nullptr, *edSize_ = nullptr, *pvSize_ = nullptr, *codeScale_ = nullptr, *pageWidth_ = nullptr, *frameWidth_ = nullptr;
     QSlider* radius_ = nullptr; QLabel* radiusVal_ = nullptr;
     QCheckBox *codeBorder_ = nullptr, *codeLabel_ = nullptr, *headRules_ = nullptr;
     QMap<QString, QPushButton*> colorBtns_;

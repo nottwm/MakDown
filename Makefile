@@ -64,8 +64,8 @@ BUILD := build/$(TARGET)
 ifeq ($(TARGET),win)
   EXE     := $(APP).exe
   DEFS    := -DMAKDOWN_WIN -DMAKDOWN_TARGET=\"win\"
-  # GUI subsystem: no console window (arch/win/platform.cpp re-attaches one for --debug)
-  LDEXTRA := -mwindows
+  # GUI subsystem: no console window (arch/win/platform.cpp re-attaches one for --debug); dwmapi: custom window frame
+  LDEXTRA := -mwindows -ldwmapi
 else
   EXE     := $(APP)
   DEFS    := -DMAKDOWN_UNX -DMAKDOWN_TARGET=\"unx\"

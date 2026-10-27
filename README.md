@@ -79,6 +79,9 @@ Editable JSON packs for **C, C++, Makefile, linker scripts, Rust, Bash, Batch, H
 ### Themes
 Stock presets: **GitHub, Windows 11, Warm** (each with a Dark variant), **VS Code Light/Dark**, **Glass Light/Dark**, **TTY, opencode, Gruvbox, Nord, Catppuccin**. Create your own as `.jsonc` files or with the in-app theme editor.
 
+### Custom window frame (Windows)
+MakDown draws its own **title bar** (icon, menus, minimise / maximise / close) and a **themed window border** that changes between focused and unfocused. Resizing, Aero Snap, the shadow and Windows 11 rounded corners stay native. Toggle in Settings > Appearance, or run with `--native-frame`. See [`window-frame.md`](Documentation/window-frame.md).
+
 ### Animations
 Four levels in Settings > Animations: *Don't distract me*, *Just a little bit*, *Normal*, *Entertain me*. Covers fades, sliding panels, theme cross-fades, springy motion, smooth wheel scrolling and a dancing equalizer in the audio preview.
 
@@ -164,13 +167,14 @@ Full details: [`Documentation/building.md`](Documentation/building.md).
 ## Command line
 
 ```
-makdown [file] [--debug] [--version] [--help]
+makdown [file] [--debug] [--native-frame] [--version] [--help]
 ```
 
 | Flag | Meaning |
 |---|---|
 | `file` | Open this file on start (markdown, source, image, sound, html ...) |
 | `--debug`, `-d` | Print compiler / build date / architecture and verbose logs (opens a console on Windows) |
+| `--native-frame` | Windows: keep the OS title bar and border instead of MakDown's themed ones |
 | `--version` | Print version |
 | `--help`, `-h` | Show usage |
 
@@ -332,6 +336,7 @@ MakDown/
 │   ├── console.cpp        shell console in a pty
 │   ├── findbar.cpp        find / replace bar
 │   ├── fx.cpp             animation helpers
+│   ├── titlebar.cpp       custom window frame: title bar, caption buttons, border
 │   └── settingsdialog.cpp settings + custom theme editor
 ├── arch/
 │   ├── unx/               Linux/macOS platform code
@@ -357,6 +362,7 @@ Details: [`Documentation/architecture.md`](Documentation/architecture.md).
 |---|---|
 | [`building.md`](Documentation/building.md) | Dependencies, make variables, optional modules, Windows deploy, cross-compiling |
 | [`presets.md`](Documentation/presets.md) | Theme files, chrome flavours, fonts |
+| [`window-frame.md`](Documentation/window-frame.md) | Windows custom title bar and themed window border |
 | [`syntax.md`](Documentation/syntax.md) | Syntax pack format and scopes |
 | [`hotkeys.md`](Documentation/hotkeys.md) | All shortcuts and vim keys |
 | [`search.md`](Documentation/search.md) | Find/replace, go to file, find in files |

@@ -7,7 +7,7 @@ Stock and custom themes are `.jsonc` files (JSON + `//` comments):
 
 Stock presets (GitHub, Windows 11, Warm (each with a Dark variant), VS Code Light/Dark, Glass Light/Dark, TTY, opencode, Gruvbox, Nord, Catppuccin) are written there on first launch and are
 read-only in the UI. Use Settings -> Appearance -> Clone... / New... (you must name the preset) to make editable ones.
-Customisable: fonts, UI corner radius, code-block style, document width, app layout (`chrome`), all colours.
+Customisable: fonts, UI corner radius, code-block style, document width, app layout (`chrome`), all colours, window border width (Windows, see [`window-frame.md`](window-frame.md)).
 See `Documentation/presets/example-custom.jsonc`. Settings live next to `presets/` in `settings.jsonc`.
 
 ## Dark variants and fonts

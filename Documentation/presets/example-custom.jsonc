@@ -9,6 +9,7 @@
               "accent": "#ff8a5b", "accentFg": "#1b1423", "codeBg": "#120d19", "codeFg": "#ffd59e" },
   "fonts":  { "ui": "Segoe UI, sans-serif", "uiSize": 10, "editor": "JetBrains Mono, monospace", "editorSize": 11,
               "preview": "Georgia, serif", "previewSize": 12, "code": "monospace", "codeScalePercent": 90 },
-  "shape":  { "cornerRadius": 12, "codeBorder": true, "codeLanguageLabel": true, "headingRules": false, "pageWidth": 820 }
+  "shape":  { "cornerRadius": 12, "codeBorder": true, "codeLanguageLabel": true, "headingRules": false, "pageWidth": 820,
+              "windowBorderWidth": 2 }   // Windows custom frame; colours: frameBorder / frameBorderInactive
   // missing colour keys are derived automatically
 }

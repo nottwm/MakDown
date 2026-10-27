@@ -27,11 +27,12 @@
     │   ├── quickopen.cpp      "go to file" panel (Ctrl+P) (worker thread, fuzzy filter)
     │   ├── gittab.cpp         Git tab: clone over http(s) / ssh with the system git (QProcess, progress bar, log)
     │   ├── fx.cpp             animation helpers (fade, tween, cross-fade, smooth scroll)
+    │   ├── titlebar.cpp       custom window frame widgets: title bar, caption buttons, themed border (Windows)
     │   ├── browsertab.cpp     browser tab + live reload (QtWebEngine, optional: behind MAKDOWN_WEBENGINE)
     │   └── settingsdialog.cpp settings + custom theme editor
     ├── arch/
-    │   ├── unx/platform.cpp   Linux/macOS: paths
-    │   └── win/               platform.cpp (paths + debug console), makdown.rc (exe icon)
+    │   ├── unx/platform.cpp   Linux/macOS: paths (custom-frame hooks are no-ops)
+    │   └── win/               platform.cpp (paths, debug console, custom window frame via Win32/DWM), makdown.rc (exe icon)
     ├── include/makdown/       public headers, mirrors the source dirs (core/ ui/ arch/)
     ├── assets/                icon.png (source), icon.ico (Windows exe icon)
     ├── Documentation/         building, presets, syntax, hotkeys, example preset

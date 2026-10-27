@@ -43,7 +43,7 @@ Changing the setting rebuilds everything automatically (the Makefile tracks the 
 
 WebEngine is a large module (Chromium). On WSL, if the browser tab is blank or crashes, try `QTWEBENGINE_CHROMIUM_FLAGS=--disable-gpu ./build/unx/MakDown`.
 
-## Cross-compiling for Windows from Linux / Arch WSL
+## Cross-compiling for Windows from Linux / WSL
 
 A `CXX` set in your environment (for example `CXX=clang++`) is ignored for `TARGET=win` - the MinGW compiler `x86_64-w64-mingw32-g++` is
 used. To force another compiler pass it on the command line: `make TARGET=win CXX=...`.

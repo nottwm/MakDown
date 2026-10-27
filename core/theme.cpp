@@ -39,7 +39,7 @@ bool writeFile(const QString& path, const QString& text) {
 // otherwise Qt falls through the list to the next installed family.
 #define ANTHROPIC_SERIF "Anthropic Serif, Tiempos Text, Georgia, Noto Serif, Times New Roman, serif"
 // Bump when stock palettes change: untouched stock presets on disk with an older revision are rewritten at launch.
-static const int kStockRevision = 2;
+static const int kStockRevision = 3;
 #define VSSANS  "Segoe UI, system-ui, Ubuntu, Noto Sans, Helvetica Neue, Arial, sans-serif"
 #define VSMONO  "Consolas, Menlo, Droid Sans Mono, DejaVu Sans Mono, monospace"
 #define GLASSSANS "SF Pro Display, SF Pro Text, -apple-system, Segoe UI Variable, Segoe UI, Inter, Noto Sans, Helvetica Neue, Arial, sans-serif"
@@ -78,7 +78,8 @@ const Pal kPalettes[] = {
 const QStringList kColorKeys = {
     "bg","panel","fg","muted","border","accent","accentFg",
     "editorBg","editorFg","gutterBg","gutterFg","lineHighlight","selection",
-    "link","heading","quoteBar","codeBg","codeFg","tableHeader"
+    "link","heading","quoteBar","codeBg","codeFg","tableHeader",
+    "frameBorder","frameBorderInactive"
 };
 } // namespace
 
@@ -99,6 +100,8 @@ void Theme::fillDefaults() {
     def("gutterBg", color("editorBg")); def("gutterFg", color("muted"));
     def("lineHighlight", mixColors(color("editorBg"), color("fg"), 0.06));
     def("tableHeader", color("panel"));
+    def("frameBorder", color("accent"));                                         // custom window border, focused window
+    def("frameBorderInactive", mixColors(color("border"), color("fg"), 0.25));   // ... and when another window has focus
     if (uiFont.isEmpty())      uiFont = SANS;
     if (editorFont.isEmpty())  editorFont = MONO;
     if (previewFont.isEmpty()) previewFont = SANS;
@@ -120,6 +123,7 @@ QJsonObject Theme::toJson() const {
     shape["codeLanguageLabel"] = codeLangLabel;
     shape["headingRules"] = headingRules;
     shape["pageWidth"] = pageWidth;
+    shape["windowBorderWidth"] = frameWidth;
     QJsonObject o;
     o["name"] = name; o["revision"] = revision; o["builtin"] = builtin; o["dark"] = dark; o["chrome"] = chrome;
     o["colors"] = c; o["fonts"] = f; o["shape"] = shape;
@@ -146,6 +150,7 @@ Theme Theme::fromJson(const QJsonObject& o) {
     t.codeLangLabel = s["codeLanguageLabel"].toBool(true);
     t.headingRules = s["headingRules"].toBool(true);
     t.pageWidth = s["pageWidth"].toInt(860);
+    t.frameWidth = qBound(0, s["windowBorderWidth"].toInt(1), 6);
     t.fillDefaults();       // hand-edited files may omit keys - never leave a theme incomplete
     return t;
 }
@@ -235,7 +240,7 @@ bool ThemeStore::save(const Theme& t) {
         "// Plain JSON with comments (.jsonc). Edit freely - MakDown re-reads this folder on launch.\n"
         "//   chrome : github | win11 | terminal | warm | vscode | glass | plain   (overall app layout flavour)\n"
         "//   colors : \"#rrggbb\" values;  fonts: comma separated fallback lists\n"
-        "//   shape  : cornerRadius (px) for UI corners, code-block + page options\n"
+        "//   shape  : cornerRadius (px) for UI corners, code-block + page options, windowBorderWidth (0-6 px, Windows)\n"
         "// Set \"builtin\": false (or clone the preset in Settings) to edit a stock preset in the UI.\n";
     const QString body = QString::fromUtf8(QJsonDocument(t.toJson()).toJson(QJsonDocument::Indented));
     return writeFile(presetsDir() + "/" + sanitizeName(t.name) + ".jsonc", header + body);
@@ -288,7 +293,7 @@ QString ThemeStore::colorLabel(const QString& k) {
         {"accent","Accent"},{"accentFg","Text on accent"},{"editorBg","Editor background"},{"editorFg","Editor text"},
         {"gutterBg","Line-number gutter"},{"gutterFg","Line numbers"},{"lineHighlight","Current line"},{"selection","Selection"},
         {"link","Links"},{"heading","Headings"},{"quoteBar","Quote bar"},{"codeBg","Code background"},{"codeFg","Code text"},
-        {"tableHeader","Table header"}};
+        {"tableHeader","Table header"},{"frameBorder","Window border"},{"frameBorderInactive","Window border (inactive)"}};
     return m.value(k, k);
 }
 
@@ -332,6 +337,8 @@ QLabel#paneHeader { background: @panel@; color: @muted@; padding: 6px 14px; bord
 QLabel#chromeTitle { background: transparent; }
 
 QFrame#chromeBar { background: @panel@; border-bottom: 1px solid @border@; }
+QFrame#titleBar { background: @panel@; border-bottom: 1px solid @border@; }
+QFrame#titleBar QMenuBar { background: transparent; border: none; }
 QFrame#swatches QLabel { border: 1px solid @border@; border-radius: @r3@px; min-width: 26px; max-width: 26px; min-height: 26px; max-height: 26px; }
 
 QMenuBar { background: @panel@; color: @fg@; border-bottom: 1px solid @border@; padding: 2px 4px; }
@@ -464,6 +471,7 @@ QTabBar::tab:selected { color: @fg@; border-bottom: 2px solid @accent@; }
         const QString gHandle = dk ? QStringLiteral("rgba(255,255,255,80)") : QStringLiteral("rgba(60,70,110,90)");
         QString g = QStringLiteral(
             "QWidget#root { background: transparent; }"
+            "QFrame#titleBar { background: transparent; border: none; }"
             "QFrame#chromeBar, QFrame#sideRail, QFrame#findBar, QFrame#browserBar { background: @gGrad@; border: 1px solid @gEdge@; border-radius: @radius@px; }"
             "QFrame#sideRail { border-radius: @r2@px; }"
             "QLabel#paneHeader { background: @gGrad@; color: @muted@; border: 1px solid @gEdge@; border-bottom: none; padding: 7px 16px; }"
@@ -547,6 +555,7 @@ void AppSettings::load() {
     folder = o["folder"].toString();
     animations = qBound(0, o["animations"].toInt(animations), 3);
     console = o["console"].toBool(console);
+    customFrame = o["customFrame"].toBool(customFrame);
 }
 
 void AppSettings::save() const {
@@ -556,7 +565,7 @@ void AppSettings::save() const {
     o["revealMarkers"] = revealMarkers; o["livePreview"] = livePreview; o["syncScroll"] = syncScroll;
     o["tabWidth"] = tabWidth; o["viewMode"] = viewMode; o["geometry"] = geometry; o["lastFile"] = lastFile;
     o["explorer"] = explorer; o["liveReload"] = liveReload; o["folder"] = folder;
-    o["animations"] = animations; o["console"] = console;
+    o["animations"] = animations; o["console"] = console; o["customFrame"] = customFrame;
     QDir().mkpath(ThemeStore::appHome());
     writeFile(ThemeStore::appHome() + "/settings.jsonc",
               "// MakDown settings (JSONC). Changed from the Settings dialog; safe to edit by hand while MakDown is closed.\n" +

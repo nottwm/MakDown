@@ -34,6 +34,7 @@ struct Theme {
     int  codeFontScale = 92;     // code font size relative to preview font, in percent
     bool headingRules  = true;   // draw a thin rule under H1/H2 (GitHub style)
     int  pageWidth     = 860;    // max width of the rendered document in px
+    int  frameWidth    = 1;      // custom window border in px, 0-6 (0 = none); colours: frameBorder / frameBorderInactive
 
     QString color(const QString& key) const;   // colour lookup with a loud fallback
     void    fillDefaults();                    // fills every missing colour/font so a theme is always complete
@@ -81,6 +82,7 @@ struct AppSettings {
     QString folder;                // explorer root
     int  animations = 2;           // 0 none, 1 little, 2 normal, 3 full (core/anim.h)
     bool console = false;          // the console panel under the editor is shown
+    bool customFrame = true;       // MakDown draws its own title bar + themed window border (Windows only; see ui/titlebar.h)
     void load();
     void save() const;
 };

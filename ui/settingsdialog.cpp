@@ -232,8 +232,8 @@ QWidget* SettingsDialog::buildAnimationsPage() {
     struct Opt { const char* name; const char* hint; };
     const Opt opts[] = {
         {"Don't distract me",    "No animations at all."},
-        {"Just a little bit",    "Quick fades and the explorer sliding in and out."},
-        {"Normal",               "Fades, sliding panels, the window fading in and themes cross-fading when you switch."},
+        {"Keep it sober",    "Quick fades and the explorer sliding in and out."},
+        {"Make it pretty",               "Fades, sliding panels, the window fading in and themes cross-fading when you switch."},
         {"Entertain me",         "Everything above, slower and springier, smooth wheel scrolling, and a dancing equalizer in the audio preview."},
     };
     auto* group = new QButtonGroup(page);

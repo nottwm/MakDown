@@ -385,6 +385,12 @@ Details: [`Documentation/architecture.md`](Documentation/architecture.md).
 
 ---
 
+# AI
+
+*Claude* was used to help with this project. No, **not all of the code was written by Claude**. Don't get me wrong
+
+---
+
 ## License
 
 MIT, (c) 2026 nottwm. See [`LICENSE`](LICENSE).

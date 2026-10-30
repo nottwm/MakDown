@@ -356,6 +356,28 @@ Details: [`Documentation/architecture.md`](Documentation/architecture.md).
 
 ---
 
+# Tests
+
+Tests were created to check for any problems or errors in the code, requiring a rebuild or changes in the code.
+To run tests enter the following command:
+```sh
+make test
+```
+
+**There should be 9 expected failures.**
+Expected failures are known issues in the code. Known failures:
+  - `TestTables.test_KNOWN_ISSUE_single_dash_separator_cells`
+  - `TestFuzz.test_KNOWN_ISSUE_paste_inside_visual_mode_leaves_stale_selection_state`
+  - `TestIndentation.test_KNOWN_ISSUE_prefix_on_selection_ending_at_column_zero`
+  - `TestIndentation.test_KNOWN_ISSUE_selection_ending_at_column_zero_does_not_include_next_line`
+  - `TestVimEditing.test_KNOWN_ISSUE_undo_inside_visual_line_leaves_stale_selection_state`
+  - `TestVimOperators.test_KNOWN_ISSUE_dG_is_not_linewise`
+  - `TestVimOperators.test_KNOWN_ISSUE_dgg_is_ignored`
+  - `TestVimVisual.test_KNOWN_ISSUE_visual_line_indent_touches_one_line_too_many`
+  - `TestLivePreview.test_KNOWN_ISSUE_deeply_nested_blockquotes_freeze_the_preview`
+
+---
+
 ## Documentation index
 
 | Doc | Covers |

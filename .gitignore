@@ -3,3 +3,5 @@ build/
 *.exe
 *.dll
 MakDown
+__pycache__/
+*.pyc

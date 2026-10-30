@@ -1,0 +1,7 @@
+# Compiler warnings that are KNOWN and accepted in a default build. One regular expression per line (matched
+# against the warning text). Any warning NOT matched here fails tests/test_10_build.py - so new warnings can't slip in.
+# Add a short reason as a comment above each entry.
+
+# ui/mediatab.cpp: fmtTime() is only used inside #ifdef MAKDOWN_MULTIMEDIA, so builds without QtMultimedia (the default
+# when qt6-multimedia-dev is absent) report it unused. Harmless; fix by moving it inside the #ifdef.
+mediatab\.cpp.*fmtTime.*defined but not used

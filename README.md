@@ -24,6 +24,7 @@ make debug    # build + run with the compiler / build-date / arch banner
 - [Syntax highlighting packs](#syntax-highlighting-packs)
 - [Configuration and data locations](#configuration-and-data-locations)
 - [Project layout](#project-layout)
+- [Tests](#tests)
 - [Documentation index](#documentation-index)
 - [Limitations](#limitations)
 - [License](#license)

@@ -9,6 +9,7 @@
 #     make deploy     build for Windows and copy the needed DLLs next to the exe
 #     make run        build + launch
 #     make debug      build + launch with --debug (compiler/date/arch banner)
+#     make test       run the test-suite (python3 tests/run_tests.py; pass options via ARGS="--fast")
 #     make clean      remove build/<target>
 #     make mrproper   remove build/ entirely
 #     make help
@@ -150,7 +151,7 @@ else
 endif
 
 # ---- rules ---------------------------------------------------------------------
-.PHONY: all unx win deploy run debug clean mrproper help FORCE
+.PHONY: all unx win deploy run debug test clean mrproper help FORCE
 .SECONDARY:
 all: $(BUILD)/$(EXE)
 unx:
@@ -198,6 +199,8 @@ run: all
 	./$(BUILD)/$(EXE)
 debug: all
 	./$(BUILD)/$(EXE) --debug
+test:
+	python3 tests/run_tests.py $(ARGS)
 clean:
 	$(Q)rm -rf $(BUILD)
 mrproper:

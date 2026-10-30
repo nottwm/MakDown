@@ -3,6 +3,7 @@
 Run before opening a PR or publishing a release:
 
 ```sh
+make test                                      # same as the next line
 python3 tests/run_tests.py                       # static + unit + real-app tests (~4 min)
 python3 tests/run_tests.py --fast                # static + in-process unit tests only
 python3 tests/run_tests.py --full                # + clean/incremental/variant builds in throw-away copies

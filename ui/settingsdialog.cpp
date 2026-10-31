@@ -1,6 +1,7 @@
 // settingsdialog.cpp - sidebar-style settings: Appearance (themes + custom editor), Editor, Preview, About.
 #include <makdown/ui/settingsdialog.h>
 #include <makdown/core/buildinfo.h>
+#include <makdown/core/lang.h>
 #include <makdown/arch/platform.h>
 
 #include <QCheckBox>
@@ -40,19 +41,20 @@ QWidget* scrollPage(QWidget* inner) {          // wraps a page in a transparent 
 
 SettingsDialog::SettingsDialog(AppSettings& s, QList<Theme>& themes, QWidget* parent)
     : QDialog(parent), s_(s), themes_(themes) {
-    setWindowTitle("MakDown \u2014 Settings");
+    setWindowTitle(L("settings.title"));
     resize(960, 680);
 
     auto* root = new QVBoxLayout(this); root->setContentsMargins(0, 0, 0, 0); root->setSpacing(0);
     auto* body = new QHBoxLayout; body->setSpacing(0);
 
     nav_ = new QListWidget; nav_->setObjectName("nav"); nav_->setFixedWidth(210);
-    nav_->addItems({"Appearance", "Editor", "Preview", "Animations", "About"});
+    nav_->addItems({L("nav.appearance"), L("nav.editor"), L("nav.preview"), L("nav.animations"), L("nav.language"), L("nav.about")});
     pages_ = new QStackedWidget;
     pages_->addWidget(scrollPage(buildAppearancePage()));
     pages_->addWidget(scrollPage(buildEditorPage()));
     pages_->addWidget(scrollPage(buildPreviewPage()));
     pages_->addWidget(scrollPage(buildAnimationsPage()));
+    pages_->addWidget(scrollPage(buildLanguagePage()));
     pages_->addWidget(scrollPage(buildAboutPage()));
     connect(nav_, &QListWidget::currentRowChanged, this, [this](int i) {
         pages_->setCurrentIndex(i);
@@ -63,12 +65,12 @@ SettingsDialog::SettingsDialog(AppSettings& s, QList<Theme>& themes, QWidget* pa
     root->addLayout(body, 1);
 
     auto* foot = new QHBoxLayout; foot->setContentsMargins(20, 12, 20, 14);
-    auto* folder = new QPushButton("Open presets folder");
+    auto* folder = new QPushButton(L("settings.openPresets"));
     connect(folder, &QPushButton::clicked, this, [] {
         QDir().mkpath(ThemeStore::presetsDir());
         QDesktopServices::openUrl(QUrl::fromLocalFile(ThemeStore::presetsDir()));
     });
-    auto* close = new QPushButton("Done"); close->setObjectName("primary"); close->setDefault(true);
+    auto* close = new QPushButton(L("settings.done")); close->setObjectName("primary"); close->setDefault(true);
     connect(close, &QPushButton::clicked, this, &QDialog::accept);
     foot->addWidget(folder); foot->addStretch(1); foot->addWidget(close);
     root->addLayout(foot);
@@ -92,13 +94,13 @@ QCheckBox* SettingsDialog::addCheck(QVBoxLayout* l, const QString& text, const Q
 // ---------------------------------------------------------------------------------------------
 QWidget* SettingsDialog::buildAppearancePage() {
     auto* page = new QWidget; auto* v = new QVBoxLayout(page); v->setContentsMargins(28, 22, 28, 22); v->setSpacing(10);
-    v->addWidget(title("Appearance"));
+    v->addWidget(title(L("nav.appearance")));
 
     // theme row
     auto* row = new QHBoxLayout;
     themeCombo_ = new QComboBox; themeCombo_->setMinimumWidth(240);
-    cloneBtn_ = new QPushButton("Clone..."); newBtn_ = new QPushButton("New..."); delBtn_ = new QPushButton("Delete");
-    row->addWidget(new QLabel("Theme")); row->addWidget(themeCombo_); row->addWidget(cloneBtn_); row->addWidget(newBtn_);
+    cloneBtn_ = new QPushButton(L("theme.clone")); newBtn_ = new QPushButton(L("theme.new")); delBtn_ = new QPushButton(L("theme.delete"));
+    row->addWidget(new QLabel(L("theme.label"))); row->addWidget(themeCombo_); row->addWidget(cloneBtn_); row->addWidget(newBtn_);
     row->addWidget(delBtn_); row->addStretch(1);
     v->addLayout(row);
     connect(themeCombo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int i) {
@@ -111,9 +113,7 @@ QWidget* SettingsDialog::buildAppearancePage() {
     connect(delBtn_, &QPushButton::clicked, this, [this] { deleteCurrent(); });
 
     if (platform::customFrameSupported())
-        addCheck(v, "Custom window frame", "MakDown draws its own title bar and a themed window border instead of the Windows ones. "
-                    "Resizing, snapping and the shadow stay native. Turn off to get the standard Windows frame "
-                    "(takes effect when you close Settings).", &s_.customFrame);
+        addCheck(v, L("theme.frame"), L("theme.frameHint"), &s_.customFrame);
 
     // colour swatch strip (quick visual summary of the selected theme)
     swatches_ = new QFrame; swatches_->setObjectName("swatches");
@@ -122,21 +122,21 @@ QWidget* SettingsDialog::buildAppearancePage() {
     sw->addStretch(1);
     v->addWidget(swatches_);
 
-    readOnlyHint_ = new QLabel("Stock presets are read-only. Press <b>Clone...</b> to make an editable copy under your own name.");
+    readOnlyHint_ = new QLabel(L("theme.readOnlyHint"));
     readOnlyHint_->setWordWrap(true); readOnlyHint_->setObjectName("hint"); readOnlyHint_->setTextFormat(Qt::RichText);
     readOnlyHint_->setStyleSheet("margin-left:0px;");
     v->addWidget(readOnlyHint_);
 
     // ---- custom editor (enabled only for custom themes)
-    customBox_ = new QGroupBox("Customize");
+    customBox_ = new QGroupBox(L("theme.customize"));
     auto* cv = new QVBoxLayout(customBox_); cv->setSpacing(12);
     auto* form = new QFormLayout; form->setHorizontalSpacing(14); form->setVerticalSpacing(8);
 
     chromeCombo_ = new QComboBox;
-    chromeCombo_->addItem("Minimal", "plain"); chromeCombo_->addItem("GitHub", "github"); chromeCombo_->addItem("Windows 11", "win11");
-    chromeCombo_->addItem("Terminal (TTY / opencode)", "terminal"); chromeCombo_->addItem("Warm", "warm");
+    chromeCombo_->addItem(L("chrome.plain"), "plain"); chromeCombo_->addItem("GitHub", "github"); chromeCombo_->addItem("Windows 11", "win11");
+    chromeCombo_->addItem(L("chrome.terminal"), "terminal"); chromeCombo_->addItem(L("chrome.warm"), "warm");
     chromeCombo_->addItem("VS Code", "vscode"); chromeCombo_->addItem("Glass", "glass");
-    form->addRow("App layout", chromeCombo_);
+    form->addRow(L("theme.layout"), chromeCombo_);
     connect(chromeCombo_, QOverload<int>::of(&QComboBox::activated), this, [this](int i) {
         const QString v = chromeCombo_->itemData(i).toString(); edit([v](Theme& t) { t.chrome = v; });
     });
@@ -154,31 +154,31 @@ QWidget* SettingsDialog::buildAppearancePage() {
         });
         connect(size, QOverload<int>::of(&QSpinBox::valueChanged), this, [this, setSize](int n) { edit([=](Theme& t) { setSize(t, n); }); });
     };
-    fontRow("Interface font", uiFontBox_, uiSize_, false, [](Theme& t, const QString& f) { t.uiFont = f; }, [](Theme& t, int n) { t.uiSize = n; });
-    fontRow("Editor font", edFontBox_, edSize_, true, [](Theme& t, const QString& f) { t.editorFont = f; }, [](Theme& t, int n) { t.editorSize = n; });
-    fontRow("Preview font", pvFontBox_, pvSize_, false, [](Theme& t, const QString& f) { t.previewFont = f; }, [](Theme& t, int n) { t.previewSize = n; });
+    fontRow(L("theme.uiFont"), uiFontBox_, uiSize_, false, [](Theme& t, const QString& f) { t.uiFont = f; }, [](Theme& t, int n) { t.uiSize = n; });
+    fontRow(L("theme.editorFont"), edFontBox_, edSize_, true, [](Theme& t, const QString& f) { t.editorFont = f; }, [](Theme& t, int n) { t.editorSize = n; });
+    fontRow(L("theme.previewFont"), pvFontBox_, pvSize_, false, [](Theme& t, const QString& f) { t.previewFont = f; }, [](Theme& t, int n) { t.previewSize = n; });
 
     // code preview styling
     codeFontBox_ = new QFontComboBox; codeFontBox_->setFontFilters(QFontComboBox::MonospacedFonts);
     codeScale_ = new QSpinBox; codeScale_->setRange(60, 140); codeScale_->setSuffix(" %");
     auto* ch = new QHBoxLayout; ch->addWidget(codeFontBox_, 1); ch->addWidget(codeScale_);
-    form->addRow("Code font / size", ch);
+    form->addRow(L("theme.codeFont"), ch);
     connect(codeFontBox_, &QFontComboBox::currentFontChanged, this, [this](const QFont& f) { const QString fam = f.family(); edit([=](Theme& t) { t.codeFont = fam; }); });
     connect(codeScale_, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int n) { edit([=](Theme& t) { t.codeFontScale = n; }); });
 
     // UI corners
     radius_ = new QSlider(Qt::Horizontal); radius_->setRange(0, 20); radiusVal_ = new QLabel; radiusVal_->setMinimumWidth(36);
     auto* rh = new QHBoxLayout; rh->addWidget(radius_, 1); rh->addWidget(radiusVal_);
-    form->addRow("UI corner radius", rh);
+    form->addRow(L("theme.radius"), rh);
     connect(radius_, &QSlider::valueChanged, this, [this](int n) { radiusVal_->setText(QString::number(n) + " px"); edit([=](Theme& t) { t.radius = n; }); });
 
     if (platform::customFrameSupported()) {
-        frameWidth_ = new QSpinBox; frameWidth_->setRange(0, 6); frameWidth_->setSuffix(" px"); frameWidth_->setSpecialValueText("None");
-        form->addRow("Window border", frameWidth_);
+        frameWidth_ = new QSpinBox; frameWidth_->setRange(0, 6); frameWidth_->setSuffix(" px"); frameWidth_->setSpecialValueText(L("theme.none"));
+        form->addRow(L("theme.windowBorder"), frameWidth_);
         connect(frameWidth_, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int n) { edit([=](Theme& t) { t.frameWidth = n; }); });
     }
     pageWidth_ = new QSpinBox; pageWidth_->setRange(480, 1800); pageWidth_->setSingleStep(20); pageWidth_->setSuffix(" px");
-    form->addRow("Document width", pageWidth_);
+    form->addRow(L("theme.docWidth"), pageWidth_);
     connect(pageWidth_, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int n) { edit([=](Theme& t) { t.pageWidth = n; }); });
     cv->addLayout(form);
 
@@ -186,9 +186,9 @@ QWidget* SettingsDialog::buildAppearancePage() {
         cb = new QCheckBox(text); cv->addWidget(cb);
         connect(cb, &QCheckBox::toggled, this, [this, fn](bool on) { edit([=](Theme& t) { fn(t, on); }); });
     };
-    bindCheck(codeBorder_, "Border around code blocks", [](Theme& t, bool on) { t.codeBorder = on; });
-    bindCheck(codeLabel_, "Show language label on code blocks", [](Theme& t, bool on) { t.codeLangLabel = on; });
-    bindCheck(headRules_, "Rule under H1 / H2 headings", [](Theme& t, bool on) { t.headingRules = on; });
+    bindCheck(codeBorder_, L("theme.codeBorder"), [](Theme& t, bool on) { t.codeBorder = on; });
+    bindCheck(codeLabel_, L("theme.codeLabel"), [](Theme& t, bool on) { t.codeLangLabel = on; });
+    bindCheck(headRules_, L("theme.headRules"), [](Theme& t, bool on) { t.headingRules = on; });
 
     // colour grid
     auto* grid = new QGridLayout; grid->setHorizontalSpacing(10); grid->setVerticalSpacing(8);
@@ -199,7 +199,7 @@ QWidget* SettingsDialog::buildAppearancePage() {
         connect(b, &QPushButton::clicked, this, [this, key] { pickColor(key); });
         grid->addWidget(b, i / 3, i % 3); ++i;
     }
-    cv->addWidget(new QLabel("Colours"));
+    cv->addWidget(new QLabel(L("theme.colours")));
     cv->addLayout(grid);
 
     v->addWidget(customBox_);
@@ -209,17 +209,16 @@ QWidget* SettingsDialog::buildAppearancePage() {
 
 QWidget* SettingsDialog::buildEditorPage() {
     auto* page = new QWidget; auto* v = new QVBoxLayout(page); v->setContentsMargins(28, 22, 28, 22);
-    v->addWidget(title("Editor"));
-    addCheck(v, "Vim keys", "Modal editing (normal / insert / visual, d y c p u, counts, :w :q, /search) plus extras: "
-                            "Alt+Up/Down moves a line, Ctrl+Shift+D duplicates it, Ctrl+D / Ctrl+U scroll half a page.", &s_.vim);
-    addCheck(v, "Paragraph marks (\u00B6)", "Word-style formatting marks: a pilcrow after every paragraph.", &s_.paragraphMarks);
-    addCheck(v, "Show spaces and tabs", "Dots for spaces, arrows for tabs.", &s_.showSpaces);
-    addCheck(v, "Line numbers", QString(), &s_.lineNumbers);
-    addCheck(v, "Highlight current line", QString(), &s_.highlightLine);
-    addCheck(v, "Word wrap", QString(), &s_.wrap);
-    addCheck(v, "Side bar", "Files, Search and Git on the left (Ctrl+Shift+E).", &s_.explorer);
+    v->addWidget(title(L("nav.editor")));
+    addCheck(v, L("editor.vim"), L("editor.vimHint"), &s_.vim);
+    addCheck(v, L("editor.marks"), L("editor.marksHint"), &s_.paragraphMarks);
+    addCheck(v, L("editor.spaces"), L("editor.spacesHint"), &s_.showSpaces);
+    addCheck(v, L("editor.numbers"), QString(), &s_.lineNumbers);
+    addCheck(v, L("editor.highlight"), QString(), &s_.highlightLine);
+    addCheck(v, L("editor.wrap"), QString(), &s_.wrap);
+    addCheck(v, L("editor.sidebar"), L("editor.sidebarHint"), &s_.explorer);
     auto* row = new QHBoxLayout; auto* tab = new QSpinBox; tab->setRange(1, 16); tab->setValue(s_.tabWidth);
-    row->addWidget(new QLabel("Tab width")); row->addWidget(tab); row->addStretch(1);
+    row->addWidget(new QLabel(L("editor.tabWidth"))); row->addWidget(tab); row->addStretch(1);
     v->addLayout(row);
     connect(tab, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int n) { s_.tabWidth = n; emit applied(); });
     v->addStretch(1);
@@ -228,45 +227,70 @@ QWidget* SettingsDialog::buildEditorPage() {
 
 QWidget* SettingsDialog::buildPreviewPage() {
     auto* page = new QWidget; auto* v = new QVBoxLayout(page); v->setContentsMargins(28, 22, 28, 22);
-    v->addWidget(title("Preview"));
-    addCheck(v, "Reveal hidden markdown markers", "Shows the usually invisible *, -, #, > and ` characters as faint ghost glyphs in the preview.", &s_.revealMarkers);
-    addCheck(v, "Live preview", "Re-render while typing. When off, press F5 or save to refresh.", &s_.livePreview);
-    addCheck(v, "Synchronised scrolling", "The preview follows the editor's scroll position.", &s_.syncScroll);
-    addCheck(v, "Live reload in browser tabs", "Browser tabs reload when the page or its .html / .js / .css files change on disk.", &s_.liveReload);
+    v->addWidget(title(L("nav.preview")));
+    addCheck(v, L("preview.reveal"), L("preview.revealHint"), &s_.revealMarkers);
+    addCheck(v, L("preview.live"), L("preview.liveHint"), &s_.livePreview);
+    addCheck(v, L("preview.sync"), L("preview.syncHint"), &s_.syncScroll);
+    addCheck(v, L("preview.liveReload"), L("preview.liveReloadHint"), &s_.liveReload);
     v->addStretch(1);
     return page;
 }
 
 QWidget* SettingsDialog::buildAnimationsPage() {
     auto* page = new QWidget; auto* v = new QVBoxLayout(page); v->setContentsMargins(28, 22, 28, 22);
-    v->addWidget(title("Animations"));
-    struct Opt { const char* name; const char* hint; };
-    const Opt opts[] = {
-        {"Don't distract me",    "No animations at all."},
-        {"Keep it sober",    "Quick fades and the explorer sliding in and out."},
-        {"Make it pretty",               "Fades, sliding panels, the window fading in and themes cross-fading when you switch."},
-        {"Entertain me",         "Everything above, slower and springier, smooth wheel scrolling, and a dancing equalizer in the audio preview."},
-    };
+    v->addWidget(title(L("nav.animations")));
+    const char* const keys[4][2] = {{"anim.0.name", "anim.0.hint"}, {"anim.1.name", "anim.1.hint"}, {"anim.2.name", "anim.2.hint"}, {"anim.3.name", "anim.3.hint"}};
     auto* group = new QButtonGroup(page);
     for (int i = 0; i < 4; ++i) {
-        auto* rb = new QRadioButton(opts[i].name); rb->setChecked(s_.animations == i);
+        auto* rb = new QRadioButton(L(keys[i][0])); rb->setChecked(s_.animations == i);
         group->addButton(rb, i); v->addWidget(rb);
-        auto* h = new QLabel(opts[i].hint); h->setObjectName("hint"); h->setWordWrap(true); v->addWidget(h);
+        auto* h = new QLabel(L(keys[i][1])); h->setObjectName("hint"); h->setWordWrap(true); v->addWidget(h);
     }
     connect(group, &QButtonGroup::idClicked, this, [this](int i) { s_.animations = i; Anim::setLevel(i); emit applied(); });
     v->addStretch(1);
     return page;
 }
 
+QWidget* SettingsDialog::buildLanguagePage() {
+    auto* page = new QWidget; auto* v = new QVBoxLayout(page); v->setContentsMargins(28, 22, 28, 22); v->setSpacing(10);
+    v->addWidget(title(L("lang.title")));
+    auto* row = new QHBoxLayout;
+    auto* combo = new QComboBox; combo->setMinimumWidth(280);
+    combo->addItem(L("lang.auto"), "auto");
+    for (const Lang::Info& i : Lang::available()) combo->addItem(i.name + "  (" + i.code + ")", i.code);
+    combo->setCurrentIndex(qMax(0, combo->findData(s_.language)));
+    row->addWidget(new QLabel(L("lang.label"))); row->addWidget(combo); row->addStretch(1);
+    v->addLayout(row);
+    auto* note = new QLabel(L("lang.restart")); note->setObjectName("hint"); note->setWordWrap(true); note->hide();
+    v->addWidget(note);
+    connect(combo, QOverload<int>::of(&QComboBox::activated), this, [this, combo, note](int i) {
+        s_.language = combo->itemData(i).toString();
+        note->setVisible(Lang::resolve(s_.language) != Lang::current());      // the windows are built once: a restart switches
+        emit applied();
+    });
+    auto* hint = new QLabel(L("lang.hint").arg(QDir::toNativeSeparators(Lang::langDir()).toHtmlEscaped()));
+    hint->setObjectName("hint"); hint->setWordWrap(true); hint->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    v->addWidget(hint);
+    auto* open = new QPushButton(L("lang.openFolder"));
+    connect(open, &QPushButton::clicked, this, [] {
+        QDir().mkpath(Lang::langDir());
+        QDesktopServices::openUrl(QUrl::fromLocalFile(Lang::langDir()));
+    });
+    auto* orow = new QHBoxLayout; orow->addWidget(open); orow->addStretch(1);
+    v->addLayout(orow);
+    v->addStretch(1);
+    return page;
+}
+
 QWidget* SettingsDialog::buildAboutPage() {
     auto* page = new QWidget; auto* v = new QVBoxLayout(page); v->setContentsMargins(28, 22, 28, 22);
-    v->addWidget(title("About MakDown"));
+    v->addWidget(title(L("about.page")));
     auto* info = new QLabel(makdownBuildInfo());
     info->setTextInteractionFlags(Qt::TextSelectableByMouse);
     info->setStyleSheet("font-family: monospace;");
     v->addWidget(info);
-    auto* paths = new QLabel("<br>Presets: " + ThemeStore::presetsDir().toHtmlEscaped() + "<br>Settings: " +
-                             (ThemeStore::appHome() + "/settings.jsonc").toHtmlEscaped());
+    auto* paths = new QLabel(L("about.paths").arg(ThemeStore::presetsDir().toHtmlEscaped(),
+                                              (ThemeStore::appHome() + "/settings.jsonc").toHtmlEscaped()));
     paths->setTextInteractionFlags(Qt::TextSelectableByMouse);
     v->addWidget(paths); v->addStretch(1);
     return page;
@@ -283,7 +307,7 @@ Theme* SettingsDialog::current() {
 void SettingsDialog::rebuildThemeCombo() {
     loading_ = true;
     themeCombo_->clear();
-    for (const Theme& t : themes_) themeCombo_->addItem(t.builtin ? t.name : t.name + "   \u2605 custom", t.name);
+    for (const Theme& t : themes_) themeCombo_->addItem(t.builtin ? t.name : t.name + "   \u2605 " + L("theme.custom"), t.name);
     themeCombo_->setCurrentIndex(qMax(0, themeCombo_->findData(s_.theme)));
     loading_ = false;
 }
@@ -348,12 +372,12 @@ void SettingsDialog::edit(const std::function<void(Theme&)>& fn) {
 void SettingsDialog::createTheme(bool cloneCurrent) {
     Theme* cur = current(); if (!cur) return;
     bool ok = false;
-    QString name = QInputDialog::getText(this, cloneCurrent ? "Clone preset" : "New preset", "Name your preset:", QLineEdit::Normal,
-                                         cloneCurrent ? cur->name + " copy" : QString(), &ok);
+    QString name = QInputDialog::getText(this, cloneCurrent ? L("dlg.clonePreset") : L("dlg.newPreset"), L("dlg.presetName"), QLineEdit::Normal,
+                                         cloneCurrent ? cur->name + L("theme.copySuffix") : QString(), &ok);
     name = ThemeStore::sanitizeName(name);
     if (!ok || name.isEmpty()) return;
     for (const Theme& t : themes_)
-        if (t.name.compare(name, Qt::CaseInsensitive) == 0) { QMessageBox::warning(this, "Name taken", "A preset called \"" + name + "\" already exists."); return; }
+        if (t.name.compare(name, Qt::CaseInsensitive) == 0) { QMessageBox::warning(this, L("dlg.nameTaken.title"), L("dlg.nameTaken.text").arg(name)); return; }
     Theme n;
     if (cloneCurrent) n = *cur; else n.fillDefaults();       // "New" starts from a neutral dark palette
     n.name = name; n.builtin = false;
@@ -365,7 +389,7 @@ void SettingsDialog::createTheme(bool cloneCurrent) {
 
 void SettingsDialog::deleteCurrent() {
     Theme* t = current(); if (!t || t->builtin) return;
-    if (QMessageBox::question(this, "Delete preset", "Delete \"" + t->name + "\"? The .jsonc file will be removed.") != QMessageBox::Yes) return;
+    if (QMessageBox::question(this, L("dlg.deletePreset.title"), L("dlg.deletePreset.text").arg(t->name)) != QMessageBox::Yes) return;
     ThemeStore::remove(*t);
     themes_ = ThemeStore::loadAll();
     s_.theme = "GitHub";

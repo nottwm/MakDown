@@ -1,5 +1,6 @@
 // editor.cpp - markdown editor widget + vim engine.
 #include <makdown/ui/editor.h>
+#include <makdown/core/lang.h>
 #include <makdown/ui/synhl.h>
 #include <QKeyEvent>
 #include <QPainter>
@@ -444,10 +445,10 @@ void MarkdownEditor::emitStatus() {
     if (!vim_) return;
     QString t;
     switch (mode_) {
-        case Mode::Normal:     t = "-- NORMAL --"; break;
-        case Mode::Insert:     t = "-- INSERT --"; break;
-        case Mode::Visual:     t = "-- VISUAL --"; break;
-        case Mode::VisualLine: t = "-- V-LINE --"; break;
+        case Mode::Normal:     t = L("vim.normal"); break;
+        case Mode::Insert:     t = L("vim.insert"); break;
+        case Mode::Visual:     t = L("vim.visual"); break;
+        case Mode::VisualLine: t = L("vim.visualLine"); break;
     }
     if (count_ || !pending_.isEmpty()) t += "   " + (count_ ? QString::number(count_) : QString()) + pending_;
     emit vimModeChanged(t);

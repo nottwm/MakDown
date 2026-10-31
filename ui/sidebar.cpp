@@ -1,5 +1,6 @@
 // sidebar.cpp - see include/makdown/ui/sidebar.h
 #include <makdown/ui/sidebar.h>
+#include <makdown/core/lang.h>
 #include <makdown/ui/explorer.h>
 #include <makdown/ui/gittab.h>
 #include <makdown/ui/quickopen.h>
@@ -49,7 +50,7 @@ Sidebar::Sidebar(std::function<QString()> rootProvider, QWidget* parent) : QWidg
     auto* rail = new QFrame; rail->setObjectName("sideRail"); rail->setFixedWidth(40);
     auto* rv = new QVBoxLayout(rail); rv->setContentsMargins(0, 6, 0, 6); rv->setSpacing(2);
     railGroup_ = new QButtonGroup(this); railGroup_->setExclusive(true);
-    const char* tips[3] = {"Explorer  (Ctrl+Shift+E)", "Search  (Ctrl+Shift+F, Ctrl+P)", "Git  (Ctrl+Shift+G)"};
+    const QString tips[3] = {L("side.explorer"), L("side.search"), L("side.git")};
     for (int i = 0; i < 3; ++i) {
         auto* b = new QToolButton; b->setCheckable(true); b->setToolTip(tips[i]); b->setAutoRaise(true);
         b->setIconSize(QSize(22, 22)); b->setFocusPolicy(Qt::NoFocus); b->setToolButtonStyle(Qt::ToolButtonIconOnly);
@@ -67,8 +68,8 @@ Sidebar::Sidebar(std::function<QString()> rootProvider, QWidget* parent) : QWidg
     auto* sp = new QWidget;                                // Search page: mode switch + the two search panels
     auto* sv = new QVBoxLayout(sp); sv->setContentsMargins(0, 0, 0, 0); sv->setSpacing(0);
     auto* modes = new QHBoxLayout; modes->setContentsMargins(12, 8, 12, 0); modes->setSpacing(4);
-    modeText_ = new QToolButton; modeText_->setText("Text"); modeText_->setToolTip("Find a string in all files (Ctrl+Shift+F)");
-    modeFiles_ = new QToolButton; modeFiles_->setText("File names"); modeFiles_->setToolTip("Go to file (Ctrl+P)");
+    modeText_ = new QToolButton; modeText_->setText(L("side.modeText")); modeText_->setToolTip(L("side.modeTextTip"));
+    modeFiles_ = new QToolButton; modeFiles_->setText(L("side.modeFiles")); modeFiles_->setToolTip(L("side.modeFilesTip"));
     modeGroup_ = new QButtonGroup(this); modeGroup_->setExclusive(true);
     for (QToolButton* b : {modeText_, modeFiles_}) { b->setCheckable(true); b->setFocusPolicy(Qt::NoFocus); modeGroup_->addButton(b); modes->addWidget(b); }
     modeText_->setChecked(true);

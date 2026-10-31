@@ -1,5 +1,6 @@
 // searchtab.cpp - see include/makdown/ui/searchtab.h
 #include <makdown/ui/searchtab.h>
+#include <makdown/core/lang.h>
 #include <makdown/core/search.h>
 
 #include <QApplication>
@@ -83,12 +84,12 @@ SearchTab::SearchTab(std::function<QString()> rootProvider, QWidget* parent) : Q
         b->setStyleSheet("QToolButton { padding: 4px 5px; }"); return b;
     };
     auto* r1 = new QHBoxLayout; r1->setSpacing(4);
-    query_ = new QLineEdit; query_->setPlaceholderText("Search in all files (Enter)");
-    case_ = tb("Aa", "Match case (Alt+C)"); word_ = tb("ab", "Whole word (Alt+W)"); re_ = tb(".*", "Regular expression (Alt+R)");
+    query_ = new QLineEdit; query_->setPlaceholderText(L("search.placeholder"));
+    case_ = tb("Aa", L("opt.matchCase")); word_ = tb("ab", L("opt.wholeWord")); re_ = tb(".*", L("opt.regex"));
     r1->addWidget(query_, 1); r1->addWidget(case_); r1->addWidget(word_); r1->addWidget(re_);
     v->addLayout(r1);
-    include_ = new QLineEdit; include_->setPlaceholderText("files to include, e.g. *.md, src/**");
-    exclude_ = new QLineEdit; exclude_->setPlaceholderText("files to exclude, e.g. *.min.js, docs/");
+    include_ = new QLineEdit; include_->setPlaceholderText(L("search.include"));
+    exclude_ = new QLineEdit; exclude_->setPlaceholderText(L("search.exclude"));
     v->addWidget(include_); v->addWidget(exclude_);
     summary_ = new QLabel; summary_->setWordWrap(true);
     v->addWidget(summary_);
@@ -142,7 +143,7 @@ void SearchTab::startSearch() {
     if (o.query.isEmpty()) { summary_->clear(); return; }
     QString err;
     const QRegularExpression rx = Search::makeRegex(o, &err);
-    if (!rx.isValid()) { summary_->setText("Invalid regular expression: " + err); return; }
+    if (!rx.isValid()) { summary_->setText(L("search.invalidRegex").arg(err)); return; }
     QString root = root_();
     if (root.isEmpty()) root = QDir::currentPath();
     root = QDir::cleanPath(QFileInfo(root).absoluteFilePath());
@@ -175,7 +176,7 @@ void SearchTab::startSearch() {
         });
         job->done = true;
     });
-    summary_->setText("Searching...");
+    summary_->setText(L("search.searching"));
     thread_->start();
     poll_.start();
 }
@@ -203,7 +204,7 @@ void SearchTab::drain() {
             ++files_; hits_ += fr.hits.size();
         }
         tree_->setUpdatesEnabled(true);
-        summary_->setText(QString("Searching...  %1 results in %2 files").arg(hits_).arg(files_));
+        summary_->setText(L("search.progress").arg(Ln("search.nResults", hits_), Ln("search.inNFiles", files_)));
     }
     if (job_->done) finish();
 }
@@ -211,9 +212,9 @@ void SearchTab::drain() {
 void SearchTab::finish() {
     poll_.stop();
     if (thread_) { thread_->wait(); delete thread_; thread_ = nullptr; }
-    QString s = QString("%1 result%2 in %3 file%4").arg(hits_).arg(hits_ == 1 ? "" : "s").arg(files_).arg(files_ == 1 ? "" : "s");
-    if (job_ && job_->limited) s += QString(" (stopped at the first %1 results; narrow the search)").arg(kMaxHits);
-    s += QString(" - %1 files searched in %2").arg(job_ ? job_->scanned.load() : 0).arg(QDir::toNativeSeparators(searchedRoot_));
+    QString s = L("search.summary").arg(Ln("search.nResults", hits_), Ln("search.inNFiles", files_));
+    if (job_ && job_->limited) s += L("search.limited").arg(kMaxHits);
+    s += L("search.scanned").arg(job_ ? job_->scanned.load() : 0).arg(QDir::toNativeSeparators(searchedRoot_));
     summary_->setText(s);
     job_.reset();
 }

@@ -1,5 +1,6 @@
 // quickopen.cpp - see include/makdown/ui/quickopen.h
 #include <makdown/ui/quickopen.h>
+#include <makdown/core/lang.h>
 #include <makdown/core/search.h>
 
 #include <QApplication>
@@ -27,7 +28,7 @@ struct QuickOpen::Job {
 QuickOpen::QuickOpen(QWidget* parent) : QWidget(parent) {
     auto* v = new QVBoxLayout(this);
     v->setContentsMargins(12, 8, 12, 8); v->setSpacing(6);
-    edit_ = new QLineEdit; edit_->setPlaceholderText("Go to file  (name:42 = line)");
+    edit_ = new QLineEdit; edit_->setPlaceholderText(L("quick.placeholder"));
     list_ = new QListWidget; list_->setObjectName("quickList"); list_->setUniformItemSizes(true);
     list_->setFocusPolicy(Qt::NoFocus);
     status_ = new QLabel; status_->setObjectName("quickStatus");
@@ -55,7 +56,7 @@ void QuickOpen::start(const QString& rootIn) {
     root_ = QDir::cleanPath(QFileInfo(rootIn.isEmpty() ? QDir::currentPath() : rootIn).absoluteFilePath());
     files_.clear(); list_->clear(); edit_->clear();
     indexing_ = true;
-    status_->setText("Indexing...");
+    status_->setText(L("quick.indexing"));
 
     job_ = std::make_shared<Job>();
     std::shared_ptr<Job> job = job_;
@@ -117,7 +118,7 @@ void QuickOpen::refilter() {
     }
     list_->setUpdatesEnabled(true);
     if (list_->count()) list_->setCurrentRow(0);
-    status_->setText(QString("%1 of %2 files%3").arg(rows.size()).arg(files_.size()).arg(indexing_ ? "  (indexing...)" : QString()));
+    status_->setText(L("quick.status").arg(rows.size()).arg(files_.size()).arg(indexing_ ? L("quick.indexingSuffix") : QString()));
 }
 
 void QuickOpen::choose(QListWidgetItem* it) {

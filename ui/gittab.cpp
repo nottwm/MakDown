@@ -1,5 +1,6 @@
 // gittab.cpp - see include/makdown/ui/gittab.h
 #include <makdown/ui/gittab.h>
+#include <makdown/core/lang.h>
 
 #include <QDir>
 #include <QFileDialog>
@@ -45,24 +46,24 @@ GitTab::GitTab(QWidget* parent) : QWidget(parent) {
     v->setContentsMargins(12, 10, 12, 10);
     v->setSpacing(8);
 
-    auto* title = new QLabel("<b>Clone a repository</b>");
+    auto* title = new QLabel(L("git.title"));
     v->addWidget(title);
 
-    { auto* l = new QLabel("Repository URL (https://..., ssh://... or git@host:user/repo.git)"); l->setWordWrap(true); v->addWidget(l); }
+    { auto* l = new QLabel(L("git.urlLabel")); l->setWordWrap(true); v->addWidget(l); }
     url_ = new QLineEdit; url_->setPlaceholderText("https://github.com/user/repo.git");
     v->addWidget(url_);
 
-    v->addWidget(new QLabel("Clone into (full path of the new folder)"));
+    v->addWidget(new QLabel(L("git.pathLabel")));
     auto* row = new QHBoxLayout; row->setSpacing(6);
     path_ = new QLineEdit; path_->setPlaceholderText(QDir::homePath() + "/projects/repo");
-    browse_ = new QPushButton("Browse...");
+    browse_ = new QPushButton(L("git.browse"));
     row->addWidget(path_, 1); row->addWidget(browse_);
     v->addLayout(row);
 
     auto* btns = new QHBoxLayout; btns->setSpacing(6);
-    clone_ = new QPushButton("Clone"); clone_->setObjectName("primary");
-    cancel_ = new QPushButton("Cancel"); cancel_->setEnabled(false);
-    open_ = new QPushButton("Open folder in explorer"); open_->hide();
+    clone_ = new QPushButton(L("git.clone")); clone_->setObjectName("primary");
+    cancel_ = new QPushButton(L("git.cancel")); cancel_->setEnabled(false);
+    open_ = new QPushButton(L("git.openFolder")); open_->hide();
     btns->addWidget(clone_); btns->addWidget(cancel_); btns->addStretch(1);
     v->addLayout(btns);
     v->addWidget(open_);
@@ -114,7 +115,7 @@ void GitTab::onUrlEdited() {                                     // suggest <def
 void GitTab::browse() {
     const QString start = path_->text().trimmed().isEmpty() ? (defaultParent_.isEmpty() ? QDir::homePath() : defaultParent_)
                                                             : QFileInfo(path_->text().trimmed()).absolutePath();
-    const QString parent = QFileDialog::getExistingDirectory(this, "Choose the folder to clone into", start);
+    const QString parent = QFileDialog::getExistingDirectory(this, L("git.chooseDir"), start);
     if (parent.isEmpty()) return;
     const QString name = repoName(url_->text());
     path_->setText(QDir::toNativeSeparators(name.isEmpty() ? parent : QDir(parent).filePath(name)));
@@ -144,22 +145,22 @@ void GitTab::startClone() {
     if (busy()) return;
     const QString url = url_->text().trimmed();
     QString path = path_->text().trimmed();
-    if (!validUrl(url)) { status_->setText("That is not a valid http(s) or ssh repository URL."); return; }
-    if (path.isEmpty()) { status_->setText("Specify the path to clone into."); path_->setFocus(); return; }
+    if (!validUrl(url)) { status_->setText(L("git.badUrl")); return; }
+    if (path.isEmpty()) { status_->setText(L("git.needPath")); path_->setFocus(); return; }
     path = QDir::cleanPath(QFileInfo(path).absoluteFilePath());
     const QFileInfo fi(path);
     if (fi.exists() && (!fi.isDir() || !QDir(path).isEmpty(QDir::AllEntries | QDir::NoDotAndDotDot | QDir::Hidden))) {
-        status_->setText("\"" + QDir::toNativeSeparators(path) + "\" already exists and is not an empty folder.");
+        status_->setText(L("git.notEmpty").arg(QDir::toNativeSeparators(path)));
         return;
     }
     const QString git = QStandardPaths::findExecutable("git");
-    if (git.isEmpty()) { status_->setText("git was not found in PATH. Install git and restart MakDown."); return; }
+    if (git.isEmpty()) { status_->setText(L("git.noGit")); return; }
 
     QDir().mkpath(QFileInfo(path).absolutePath());
     target_ = path; tail_.clear(); cancelled_ = false;
     log_->clear();
     appendLog("$ git clone --progress -- " + masked(url) + " " + QDir::toNativeSeparators(path));
-    status_->setText("Cloning...");
+    status_->setText(L("git.cloning"));
 
     delete proc_;
     proc_ = new QProcess(this);
@@ -172,7 +173,7 @@ void GitTab::startClone() {
     connect(proc_, &QProcess::readyRead, this, [this] { onOutput(); });
     connect(proc_, &QProcess::finished, this, [this](int c, QProcess::ExitStatus s) { onFinished(c, s); });
     connect(proc_, &QProcess::errorOccurred, this, [this](QProcess::ProcessError e) {
-        if (e == QProcess::FailedToStart) { setRunning(false); status_->setText("Could not start git."); }
+        if (e == QProcess::FailedToStart) { setRunning(false); status_->setText(L("git.startFail")); }
     });
     setRunning(true);
     proc_->start(git, {"clone", "--progress", "--", url, path});
@@ -207,11 +208,11 @@ void GitTab::onFinished(int code, QProcess::ExitStatus st) {
     onOutput();
     if (!tail_.isEmpty()) { appendLog(masked(tail_)); tail_.clear(); }
     setRunning(false);
-    if (cancelled_) { status_->setText("Cancelled."); return; }
+    if (cancelled_) { status_->setText(L("git.cancelled")); return; }
     if (st == QProcess::NormalExit && code == 0) {
-        status_->setText("Done: " + QDir::toNativeSeparators(target_));
+        status_->setText(L("git.done").arg(QDir::toNativeSeparators(target_)));
         open_->show();
     } else {
-        status_->setText(QString("git exited with code %1. See the log below.").arg(code));
+        status_->setText(L("git.exit").arg(code));
     }
 }

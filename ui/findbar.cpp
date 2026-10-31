@@ -1,5 +1,6 @@
 // findbar.cpp - see include/makdown/ui/findbar.h
 #include <makdown/ui/findbar.h>
+#include <makdown/core/lang.h>
 #include <makdown/core/search.h>
 #include <makdown/ui/editor.h>
 
@@ -30,24 +31,24 @@ FindBar::FindBar(MarkdownEditor* editor, QWidget* parent) : QWidget(parent), ed_
     };
 
     auto* r1 = new QHBoxLayout; r1->setSpacing(4);
-    toggle_ = tb("\u25B8", "Toggle replace (Ctrl+H)", true);
-    find_ = new QLineEdit; find_->setPlaceholderText("Find");
-    case_ = tb("Aa", "Match case (Alt+C)", true);
-    word_ = tb("ab", "Whole word (Alt+W)", true);
-    re_   = tb(".*", "Regular expression (Alt+R)", true);
+    toggle_ = tb("\u25B8", L("find.toggleReplace"), true);
+    find_ = new QLineEdit; find_->setPlaceholderText(L("find.placeholder"));
+    case_ = tb("Aa", L("opt.matchCase"), true);
+    word_ = tb("ab", L("opt.wholeWord"), true);
+    re_   = tb(".*", L("opt.regex"), true);
     count_ = new QLabel; count_->setMinimumWidth(78); count_->setAlignment(Qt::AlignCenter);
-    prev_ = tb("\u2191", "Previous match (Shift+Enter)", false);
-    next_ = tb("\u2193", "Next match (Enter)", false);
-    close_ = tb("\u2715", "Close (Esc)", false);
+    prev_ = tb("\u2191", L("find.prev"), false);
+    next_ = tb("\u2193", L("find.next"), false);
+    close_ = tb("\u2715", L("find.close"), false);
     for (QWidget* w : std::initializer_list<QWidget*>{toggle_, find_, case_, word_, re_, count_, prev_, next_, close_}) r1->addWidget(w, w == find_ ? 1 : 0);
     v->addLayout(r1);
 
     replRow_ = new QWidget;
     auto* r2 = new QHBoxLayout(replRow_); r2->setContentsMargins(0, 0, 0, 0); r2->setSpacing(4);
     auto* pad = new QWidget; pad->setFixedWidth(toggle_->sizeHint().width());
-    repl_ = new QLineEdit; repl_->setPlaceholderText("Replace");
-    replOne_ = tb("Replace", "Replace (Enter)", false);
-    replAll_ = tb("Replace all", "Replace all (Ctrl+Alt+Enter)", false);
+    repl_ = new QLineEdit; repl_->setPlaceholderText(L("find.replacePlaceholder"));
+    replOne_ = tb(L("find.replace"), L("find.replaceTip"), false);
+    replAll_ = tb(L("find.replaceAll"), L("find.replaceAllTip"), false);
     r2->addWidget(pad); r2->addWidget(repl_, 1); r2->addWidget(replOne_); r2->addWidget(replAll_);
     v->addWidget(replRow_);
     replRow_->hide();
@@ -116,7 +117,7 @@ void FindBar::refresh(bool jump) {
     const QRegularExpression rx = Search::makeRegex(o, &err);
     find_->setProperty("bad", !err.isEmpty());
     if (!rx.isValid()) {
-        count_->setText(err.isEmpty() ? QString() : "Invalid regex");
+        count_->setText(err.isEmpty() ? QString() : L("find.invalid"));
         count_->setToolTip(err);
         ed_->setFindMatches({});
         return;
@@ -131,7 +132,7 @@ void FindBar::refresh(bool jump) {
         matches_.append({int(m.capturedStart()), int(m.capturedEnd())});
     }
     ed_->setFindMatches(matches_.size() > kMaxHighlighted ? QVector<QPair<int, int>>() : matches_);
-    if (matches_.isEmpty()) { count_->setText("No results"); return; }
+    if (matches_.isEmpty()) { count_->setText(L("find.noResults")); return; }
 
     const int pos = ed_->textCursor().selectionStart();           // current match = first one at / after the caret
     int idx = 0;
@@ -142,7 +143,7 @@ void FindBar::refresh(bool jump) {
         cur_ = -1;
         const int sel = ed_->textCursor().selectionStart(), se = ed_->textCursor().selectionEnd();
         for (int i = 0; i < matches_.size(); ++i) if (matches_[i].first == sel && matches_[i].second == se) { cur_ = i; break; }
-        count_->setText(cur_ >= 0 ? QString("%1 of %2").arg(cur_ + 1).arg(matches_.size()) : QString("%1 found").arg(matches_.size()));
+        count_->setText(cur_ >= 0 ? L("find.counter").arg(cur_ + 1).arg(matches_.size()).arg(QString()) : L("find.found").arg(matches_.size()));
     }
 }
 
@@ -153,7 +154,7 @@ void FindBar::select(int idx) {
     c.setPosition(matches_[idx].first); c.setPosition(matches_[idx].second, QTextCursor::KeepAnchor);
     ed_->setTextCursor(c);
     ed_->centerCursor();
-    count_->setText(QString("%1 of %2%3").arg(idx + 1).arg(matches_.size()).arg(matches_.size() >= kMaxMatches ? "+" : ""));
+    count_->setText(L("find.counter").arg(idx + 1).arg(matches_.size()).arg(matches_.size() >= kMaxMatches ? "+" : ""));
 }
 
 int FindBar::nextIndex(bool backwards) const {
@@ -230,6 +231,6 @@ void FindBar::replaceAll() {
     }
     c.endEditBlock();
     selfEdit_ = false;
-    emit message(QString("%1 replaced").arg(ms.size()));
+    emit message(L("find.replaced").arg(ms.size()));
     refresh(false);
 }

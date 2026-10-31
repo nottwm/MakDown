@@ -2,6 +2,7 @@
 #include <makdown/ui/mainwindow.h>
 #include <makdown/ui/editor.h>
 #include <makdown/core/markdown.h>
+#include <makdown/core/lang.h>
 #include <makdown/ui/settingsdialog.h>
 #include <makdown/ui/explorer.h>
 #include <makdown/ui/browsertab.h>
@@ -57,32 +58,9 @@
 #include <QSignalBlocker>
 
 // ---------------------------------------------------------------------------------------------
-// Text shown when MakDown starts without a file - doubles as a feature tour.
+// Text shown when MakDown starts without a file - doubles as a feature tour (language key "welcome.doc").
 // ---------------------------------------------------------------------------------------------
-static const char* kWelcome = R"MD(# Welcome to MakDown
-
-Markdown, but **fancier**. Edit on the left, watch it render on the right.
-
-## Try these
-- [x] Switch themes in *Settings* (Ctrl+,): GitHub, Windows 11, TTY, opencode, Warm ...
-- [ ] Turn on **vimkeys** (Ctrl+Alt+V) and press `Esc`, then `dd`, `yy`, `p`, `u`
-- [ ] Toggle paragraph marks (Ctrl+Shift+L) for Word-style ¶ marks
-- [ ] Toggle *reveal markers* (Ctrl+Shift+M) to see the hidden `*`, `-`, `#` in the preview
-
-> Tip: clone a preset in Settings, give it a name and make it your own.
-
-### A table
-| Key            | Action            |
-|----------------|:-----------------:|
-| Ctrl+B / Ctrl+I| bold / italic     |
-| Ctrl+K         | insert link       |
-| Alt+Up/Down    | move line (vim)   |
-
-### Code
-```cpp
-int main() { return 0; }   // fenced blocks get their own styling
-```
-)MD";
+static QString welcomeText() { return L("welcome.doc"); }
 
 // ---------------------------------------------------------------------------------------------
 // file-type helpers: what opens where
@@ -131,6 +109,8 @@ void PreviewBrowser::applyMargins() {
 // ---------------------------------------------------------------------------------------------
 MainWindow::MainWindow(const QString& fileToOpen, bool nativeFrame) : forceNativeFrame_(nativeFrame) {
     s_.load();
+    Lang::ensureStock();
+    Lang::load(Lang::resolve(s_.language));       // before any widget exists: every string below comes from the language file
     ThemeStore::ensureStock();
     themes_ = ThemeStore::loadAll();
     SyntaxStore::ensureStock();
@@ -153,17 +133,17 @@ MainWindow::MainWindow(const QString& fileToOpen, bool nativeFrame) : forceNativ
 
     if (!fileToOpen.isEmpty() && isPreviewable(fileToOpen)) {            // an image / sound on the command line: preview it
         syncExplorerFor(fileToOpen);
-        editor_->setPlainText(QString::fromUtf8(kWelcome)); editor_->document()->setModified(false);
+        editor_->setPlainText(welcomeText()); editor_->document()->setModified(false);
         openMedia(fileToOpen);
     }
     else if (!fileToOpen.isEmpty() && isBinaryFile(fileToOpen)) {           // ask before dumping a binary into the editor
         syncExplorerFor(fileToOpen);
-        editor_->setPlainText(QString::fromUtf8(kWelcome)); editor_->document()->setModified(false);
+        editor_->setPlainText(welcomeText()); editor_->document()->setModified(false);
         openAnyFile(fileToOpen);
     }
     else if (!fileToOpen.isEmpty()) { syncExplorerFor(fileToOpen); openFile(fileToOpen); }
     else if (!s_.lastFile.isEmpty() && QFile::exists(s_.lastFile)) openFile(s_.lastFile);
-    else { editor_->setPlainText(QString::fromUtf8(kWelcome)); editor_->document()->setModified(false); }
+    else { editor_->setPlainText(welcomeText()); editor_->document()->setModified(false); }
     renderPreview();
     updateTitle();
     console_->setWorkingDirectory(explorer_->root());
@@ -206,7 +186,7 @@ void MainWindow::buildUi() {
             if (QFileInfo::exists(abs)) {
                 openAnyFile(abs);
                 if (url.hasFragment()) { const QString f = url.fragment(); QTimer::singleShot(0, this, [jump, f] { jump(f); }); }
-            } else statusBar()->showMessage("File not found: " + abs, 4000);
+            } else statusBar()->showMessage(L("status.fileNotFound").arg(abs), 4000);
             return;
         }
         QDesktopServices::openUrl(url);                  // http(s), mailto ...
@@ -220,7 +200,7 @@ void MainWindow::buildUi() {
     rightTabs_->setDocumentMode(true);
     rightTabs_->setTabsClosable(true);
     rightTabs_->setTabBarAutoHide(true);
-    rightTabs_->addTab(previewPane_, "Preview");
+    rightTabs_->addTab(previewPane_, L("tab.preview"));
     if (QTabBar* bar = rightTabs_->findChild<QTabBar*>()) bar->setTabButton(0, QTabBar::RightSide, nullptr);
     connect(rightTabs_, &QTabWidget::tabCloseRequested, this, [this](int i) {
         if (i <= 0) return;
@@ -326,90 +306,92 @@ void MainWindow::buildMenus() {
         return a;
     };
 
-    QMenu* file = titleBar_->menuBar()->addMenu("&File");
-    add(file, "&New", QKeySequence::New, [this] { newFile(); });
-    add(file, "&Open...", QKeySequence::Open, [this] {
-        const QString p = QFileDialog::getOpenFileName(this, "Open file", QString(), "Markdown (*.md *.markdown *.txt);;Images and sound (*.png *.jpg *.jpeg *.gif *.bmp *.webp *.ico *.mp3 *.wav *.ogg *.opus *.flac *.m4a *.aac);;Web files (*.html *.htm *.css *.js);;Source code (*.c *.h *.cpp *.hpp *.rs *.sh *.bat *.cmd *.ld *.mk Makefile);;All files (*)");
+    QMenu* file = titleBar_->menuBar()->addMenu(L("menu.file"));
+    add(file, L("file.new"), QKeySequence::New, [this] { newFile(); });
+    add(file, L("file.open"), QKeySequence::Open, [this] {
+        const QString p = QFileDialog::getOpenFileName(this, L("dlg.openFile"), QString(), L("filter.markdown") + " (*.md *.markdown *.txt);;" + L("filter.media") + " (*.png *.jpg *.jpeg *.gif *.bmp *.webp *.ico *.mp3 *.wav *.ogg *.opus *.flac *.m4a *.aac);;" +
+                                                     L("filter.web") + " (*.html *.htm *.css *.js);;" + L("filter.source") + " (*.c *.h *.cpp *.hpp *.rs *.sh *.bat *.cmd *.ld *.mk Makefile);;" +
+                                                     L("filter.all") + " (*)");
         if (!p.isEmpty()) openAnyFile(p);
     });
-    add(file, "Open &Folder...", QKeySequence("Ctrl+Shift+O"), [this] { chooseFolder(); });
+    add(file, L("file.openFolder"), QKeySequence("Ctrl+Shift+O"), [this] { chooseFolder(); });
     file->addSeparator();
-    add(file, "&Save", QKeySequence::Save, [this] { saveFile(); });
-    add(file, "Save &As...", QKeySequence::SaveAs, [this] { saveFileAs(); });
-    add(file, "&Export HTML...", QKeySequence(), [this] { exportHtml(); });
+    add(file, L("file.save"), QKeySequence::Save, [this] { saveFile(); });
+    add(file, L("file.saveAs"), QKeySequence::SaveAs, [this] { saveFileAs(); });
+    add(file, L("file.exportHtml"), QKeySequence(), [this] { exportHtml(); });
     file->addSeparator();
-    add(file, "&Quit", QKeySequence::Quit, [this] { close(); });
+    add(file, L("file.quit"), QKeySequence::Quit, [this] { close(); });
 
-    QMenu* edit = titleBar_->menuBar()->addMenu("&Edit");
-    add(edit, "&Undo", QKeySequence::Undo, [this] { editor_->undo(); });
-    add(edit, "&Redo", QKeySequence::Redo, [this] { editor_->redo(); });
+    QMenu* edit = titleBar_->menuBar()->addMenu(L("menu.edit"));
+    add(edit, L("edit.undo"), QKeySequence::Undo, [this] { editor_->undo(); });
+    add(edit, L("edit.redo"), QKeySequence::Redo, [this] { editor_->redo(); });
     edit->addSeparator();
-    add(edit, "&Bold", QKeySequence("Ctrl+B"), [this] { editor_->wrapSelection("**", "**"); });
-    add(edit, "&Italic", QKeySequence("Ctrl+I"), [this] { editor_->wrapSelection("*", "*"); });
-    add(edit, "Stri&kethrough", QKeySequence("Ctrl+Shift+X"), [this] { editor_->wrapSelection("~~", "~~"); });
-    add(edit, "Inline &code", QKeySequence("Ctrl+E"), [this] { editor_->wrapSelection("`", "`"); });
-    add(edit, "Insert &link", QKeySequence("Ctrl+K"), [this] { editor_->insertLink(); });
+    add(edit, L("edit.bold"), QKeySequence("Ctrl+B"), [this] { editor_->wrapSelection("**", "**"); });
+    add(edit, L("edit.italic"), QKeySequence("Ctrl+I"), [this] { editor_->wrapSelection("*", "*"); });
+    add(edit, L("edit.strike"), QKeySequence("Ctrl+Shift+X"), [this] { editor_->wrapSelection("~~", "~~"); });
+    add(edit, L("edit.code"), QKeySequence("Ctrl+E"), [this] { editor_->wrapSelection("`", "`"); });
+    add(edit, L("edit.link"), QKeySequence("Ctrl+K"), [this] { editor_->insertLink(); });
     edit->addSeparator();
-    add(edit, "Heading level up", QKeySequence("Ctrl+Alt+Up"), [this] { editor_->changeHeading(+1); });
-    add(edit, "Heading level down", QKeySequence("Ctrl+Alt+Down"), [this] { editor_->changeHeading(-1); });
-    add(edit, "Bullet list", QKeySequence("Ctrl+Shift+8"), [this] { editor_->toggleLinePrefix("- "); });
-    add(edit, "Task list", QKeySequence("Ctrl+Shift+T"), [this] { editor_->toggleLinePrefix("- [ ] "); });
-    add(edit, "Quote", QKeySequence("Ctrl+Shift+9"), [this] { editor_->toggleLinePrefix("> "); });
+    add(edit, L("edit.headingUp"), QKeySequence("Ctrl+Alt+Up"), [this] { editor_->changeHeading(+1); });
+    add(edit, L("edit.headingDown"), QKeySequence("Ctrl+Alt+Down"), [this] { editor_->changeHeading(-1); });
+    add(edit, L("edit.bullet"), QKeySequence("Ctrl+Shift+8"), [this] { editor_->toggleLinePrefix("- "); });
+    add(edit, L("edit.task"), QKeySequence("Ctrl+Shift+T"), [this] { editor_->toggleLinePrefix("- [ ] "); });
+    add(edit, L("edit.quote"), QKeySequence("Ctrl+Shift+9"), [this] { editor_->toggleLinePrefix("> "); });
 
     // Search: with vim keys off Ctrl+F / Ctrl+H / F3 drive the VS Code style find bar; with vim keys on Ctrl+F opens the "/" line
-    QMenu* srch = titleBar_->menuBar()->addMenu("&Search");
-    add(srch, "&Find", QKeySequence::Find, [this] {
+    QMenu* srch = titleBar_->menuBar()->addMenu(L("menu.search"));
+    add(srch, L("search.find"), QKeySequence::Find, [this] {
         if (!editorPane_->isVisible()) return;
         if (s_.vim) showCommandLine("/"); else findBar_->open(false);
     });
-    add(srch, "&Replace", QKeySequence("Ctrl+H"), [this] { if (!s_.vim && editorPane_->isVisible()) findBar_->open(true); });
-    add(srch, "Find &next", QKeySequence::FindNext, [this] { if (s_.vim) editor_->findNext(editor_->lastSearch()); else findBar_->step(false); });
-    add(srch, "Find &previous", QKeySequence::FindPrevious, [this] { if (s_.vim) editor_->findNext(editor_->lastSearch(), true); else findBar_->step(true); });
+    add(srch, L("search.replace"), QKeySequence("Ctrl+H"), [this] { if (!s_.vim && editorPane_->isVisible()) findBar_->open(true); });
+    add(srch, L("search.next"), QKeySequence::FindNext, [this] { if (s_.vim) editor_->findNext(editor_->lastSearch()); else findBar_->step(false); });
+    add(srch, L("search.prev"), QKeySequence::FindPrevious, [this] { if (s_.vim) editor_->findNext(editor_->lastSearch(), true); else findBar_->step(true); });
     srch->addSeparator();
-    add(srch, "Go to &file...", QKeySequence("Ctrl+P"), [this] { quickOpen(); });
-    add(srch, "Find in f&iles...", QKeySequence("Ctrl+Shift+F"), [this] {
+    add(srch, L("search.gotoFile"), QKeySequence("Ctrl+P"), [this] { quickOpen(); });
+    add(srch, L("search.inFiles"), QKeySequence("Ctrl+Shift+F"), [this] {
         const QTextCursor c = editor_->textCursor();
         const QString sel = c.hasSelection() && !c.selectedText().contains(QChar::ParagraphSeparator) ? c.selectedText() : QString();
         openSearchTab(sel);
     });
 
-    QMenu* view = titleBar_->menuBar()->addMenu("&View");
+    QMenu* view = titleBar_->menuBar()->addMenu(L("menu.view"));
     auto* group = new QActionGroup(this);
     auto mkView = [&](const QString& text, const QString& key, int mode) {
         QAction* a = view->addAction(text); a->setCheckable(true); a->setShortcut(QKeySequence(key)); group->addAction(a);
         connect(a, &QAction::triggered, this, [this, mode] { setViewMode(mode); });
         return a;
     };
-    actEditor_ = mkView("Editor only", "Ctrl+1", 0);
-    actSplit_ = mkView("Split view", "Ctrl+2", 1);
-    actPreview_ = mkView("Preview only", "Ctrl+3", 2);
-    actExplorer_ = check(view, "Side bar (files, search, git)", QKeySequence("Ctrl+Shift+E"), &s_.explorer, [] {});
-    actConsole_  = check(view, "Console", QKeySequence("Ctrl+`"), &s_.console, [] {});
+    actEditor_ = mkView(L("view.editor"), "Ctrl+1", 0);
+    actSplit_ = mkView(L("view.split"), "Ctrl+2", 1);
+    actPreview_ = mkView(L("view.preview"), "Ctrl+3", 2);
+    actExplorer_ = check(view, L("view.sidebar"), QKeySequence("Ctrl+Shift+E"), &s_.explorer, [] {});
+    actConsole_  = check(view, L("view.console"), QKeySequence("Ctrl+`"), &s_.console, [] {});
     view->addSeparator();
-    actMarks_   = check(view, "Paragraph marks (¶)", QKeySequence("Ctrl+Shift+L"), &s_.paragraphMarks, [] {});
-    actSpaces_  = check(view, "Show spaces && tabs", QKeySequence(), &s_.showSpaces, [] {});
-    actReveal_  = check(view, "Reveal markdown markers in preview", QKeySequence("Ctrl+Shift+M"), &s_.revealMarkers, [this] { renderPreview(); });
-    actNumbers_ = check(view, "Line numbers", QKeySequence(), &s_.lineNumbers, [] {});
+    actMarks_   = check(view, L("view.marks"), QKeySequence("Ctrl+Shift+L"), &s_.paragraphMarks, [] {});
+    actSpaces_  = check(view, L("view.spaces"), QKeySequence(), &s_.showSpaces, [] {});
+    actReveal_  = check(view, L("view.reveal"), QKeySequence("Ctrl+Shift+M"), &s_.revealMarkers, [this] { renderPreview(); });
+    actNumbers_ = check(view, L("view.numbers"), QKeySequence(), &s_.lineNumbers, [] {});
     view->addSeparator();
-    actVim_     = check(view, "Vim keys", QKeySequence("Ctrl+Alt+V"), &s_.vim, [] {});
-    add(view, "Refresh preview", QKeySequence(Qt::Key_F5), [this] { renderPreview(); });
-    add(view, "Full screen", QKeySequence(Qt::Key_F11), [this] { isFullScreen() ? showNormal() : showFullScreen(); });
+    actVim_     = check(view, L("view.vim"), QKeySequence("Ctrl+Alt+V"), &s_.vim, [] {});
+    add(view, L("view.refresh"), QKeySequence(Qt::Key_F5), [this] { renderPreview(); });
+    add(view, L("view.fullscreen"), QKeySequence(Qt::Key_F11), [this] { isFullScreen() ? showNormal() : showFullScreen(); });
 
-    QMenu* web = titleBar_->menuBar()->addMenu("&Browser");
-    add(web, "Open page in &browser tab", QKeySequence("Ctrl+Shift+B"), [this] { openInBrowser(); });
-    add(web, "&New browser tab", QKeySequence("Ctrl+T"), [this] { newBrowserTab(); });
+    QMenu* web = titleBar_->menuBar()->addMenu(L("menu.browser"));
+    add(web, L("browser.open"), QKeySequence("Ctrl+Shift+B"), [this] { openInBrowser(); });
+    add(web, L("browser.new"), QKeySequence("Ctrl+T"), [this] { newBrowserTab(); });
     web->addSeparator();
-    actLive_ = check(web, "&Live reload (watches .html / .js / .css)", QKeySequence(), &s_.liveReload, [] {});
+    actLive_ = check(web, L("browser.live"), QKeySequence(), &s_.liveReload, [] {});
 
-    QMenu* git = titleBar_->menuBar()->addMenu("&Git");
-    add(git, "&Clone repository...", QKeySequence("Ctrl+Shift+G"), [this] { openGitTab(); });
+    QMenu* git = titleBar_->menuBar()->addMenu(L("menu.git"));
+    add(git, L("git.cloneMenu"), QKeySequence("Ctrl+Shift+G"), [this] { openGitTab(); });
 
-    QMenu* set = titleBar_->menuBar()->addMenu("&Settings");
-    add(set, "&Preferences...", QKeySequence("Ctrl+,"), [this] { openSettings(); });
+    QMenu* set = titleBar_->menuBar()->addMenu(L("menu.settings"));
+    add(set, L("settings.prefs"), QKeySequence("Ctrl+,"), [this] { openSettings(); });
 
-    QMenu* help = titleBar_->menuBar()->addMenu("&Help");
-    add(help, "&About MakDown", QKeySequence(), [this] { showAbout(); });
-    add(help, "&Build info", QKeySequence(), [this] { QMessageBox::information(this, "Build info", makdownBuildInfo()); });
+    QMenu* help = titleBar_->menuBar()->addMenu(L("menu.help"));
+    add(help, L("help.about"), QKeySequence(), [this] { showAbout(); });
+    add(help, L("help.build"), QKeySequence(), [this] { QMessageBox::information(this, L("help.buildTitle"), makdownBuildInfo()); });
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -432,7 +414,7 @@ void MainWindow::buildChrome() {
         label(QString("<span style='color:%1'>MakDown</span> <span style='color:%2'>/</span> <b>%3</b>").arg(link, muted, name));
         QString kind = "Markdown";                       // language badge next to the file name
         if (const SyntaxPtr pack = SyntaxStore::forFile(syntax_, file_)) kind = pack->name;
-        else if (!isMarkdownDoc(file_)) kind = QFileInfo(file_).suffix().isEmpty() ? QString("Text") : QFileInfo(file_).suffix().toUpper();
+        else if (!isMarkdownDoc(file_)) kind = QFileInfo(file_).suffix().isEmpty() ? L("kind.text") : QFileInfo(file_).suffix().toUpper();
         auto* pill = new QLabel(kind); pill->setObjectName("pill"); hl->addWidget(pill);
     } else if (ch == "win11") {              // title-bar style: glyph + file + app name
         label(QString("<span style='color:%1'>&#9998;</span>&nbsp; <b>%2</b> <span style='color:%3'>&mdash; MakDown</span>").arg(accent, name, muted));
@@ -498,11 +480,11 @@ void MainWindow::updatePaneHeaders() {
     const QString ch = theme_.chrome;
     const QString name = file_.isEmpty() ? "untitled.md" : QFileInfo(file_).fileName();
     QString e, p;
-    if (ch == "terminal")      { e = "┌─[ editor: " + name + " ]";  p = "┌─[ preview ]"; }
-    else if (ch == "warm")   { e = "\u2726  Draft";               p = "\u2726  Preview"; }
-    else if (ch == "github")   { e = "Edit  \u00B7  " + name;       p = "\u2630  Preview"; }
-    else if (ch == "vscode")   { e = name;                          p = "Preview " + name; }
-    else                       { e = "Editor";                      p = "Preview"; }
+    if (ch == "terminal")      { e = L("pane.term.editor").arg(name);   p = L("pane.term.preview"); }
+    else if (ch == "warm")     { e = L("pane.warm.editor");             p = L("pane.warm.preview"); }
+    else if (ch == "github")   { e = L("pane.github.editor").arg(name); p = L("pane.github.preview"); }
+    else if (ch == "vscode")   { e = name;                              p = L("pane.vscode.preview").arg(name); }
+    else                       { e = L("pane.editor");                  p = L("pane.preview"); }
     editorHeader_->setText(e); previewHeader_->setText(p);
 }
 
@@ -610,9 +592,8 @@ void MainWindow::renderPreview() {
     if (isMarkdownDoc(file_))
         preview_->setHtml(renderMarkdownToHtml(text, theme_, s_.revealMarkers, base));
     else
-        preview_->setHtml(QString("<html><body style=\"color:%1\"><p>Not a markdown file, so there is nothing to render here.</p>"
-                                  "<p>For web pages use <b>Browser &gt; Open page in browser tab</b> (Ctrl+Shift+B): it reloads "
-                                  "whenever you save the .html, .js or .css.</p></body></html>").arg(theme_.color("muted")));
+        preview_->setHtml(QString("<html><body style=\"color:%1\"><p>%2</p><p>%3</p></body></html>")
+                           .arg(theme_.color("muted"), L("preview.notMarkdown.1"), L("preview.notMarkdown.2")));
     preview_->applyMargins();
     preview_->verticalScrollBar()->setValue(scroll);
     wordCount_ = text.split(QRegularExpression("\\s+"), Qt::SkipEmptyParts).size();
@@ -621,7 +602,7 @@ void MainWindow::renderPreview() {
 
 void MainWindow::updateStatus() {
     const QTextCursor c = editor_->textCursor();
-    posLabel_->setText(QString("Ln %1, Col %2   \u00B7   %3 words   ").arg(c.blockNumber() + 1).arg(c.positionInBlock() + 1).arg(wordCount_));
+    posLabel_->setText(L("status.position").arg(c.blockNumber() + 1).arg(c.positionInBlock() + 1).arg(Ln("status.words", wordCount_)));
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -634,7 +615,7 @@ void MainWindow::updateTitle() {
 
 bool MainWindow::maybeSave() {
     if (!editor_->document()->isModified()) return true;
-    const auto r = QMessageBox::question(this, "Unsaved changes", "Save changes before continuing?",
+    const auto r = QMessageBox::question(this, L("dlg.unsaved.title"), L("dlg.unsaved.text"),
                                          QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel);
     if (r == QMessageBox::Save) return saveFile();
     return r == QMessageBox::Discard;
@@ -643,19 +624,19 @@ bool MainWindow::maybeSave() {
 bool MainWindow::writeTo(const QString& path) {
     QFile f(path);
     if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
-        QMessageBox::warning(this, "Save failed", "Could not write " + path); return false;
+        QMessageBox::warning(this, L("dlg.saveFailed.title"), L("dlg.saveFailed.text").arg(path)); return false;
     }
     f.write(editor_->toPlainText().toUtf8());
     file_ = path; s_.lastFile = path; s_.save();
     applyHighlighting(path);
     editor_->document()->setModified(false);
-    statusBar()->showMessage("Saved " + path, 3000);
+    statusBar()->showMessage(L("status.saved").arg(path), 3000);
     buildChrome(); updatePaneHeaders(); updateTitle(); renderPreview();
     return true;
 }
 bool MainWindow::saveFile() { return file_.isEmpty() ? saveFileAs() : writeTo(file_); }
 bool MainWindow::saveFileAs() {
-    const QString p = QFileDialog::getSaveFileName(this, "Save markdown", file_.isEmpty() ? "untitled.md" : file_, "Markdown (*.md);;All files (*)");
+    const QString p = QFileDialog::getSaveFileName(this, L("dlg.saveMarkdown"), file_.isEmpty() ? "untitled.md" : file_, L("filter.markdown") + " (*.md);;" + L("filter.all") + " (*)");
     if (p.isEmpty() || !writeTo(p)) return false;
     explorer_->reveal(file_);
     return true;
@@ -663,7 +644,7 @@ bool MainWindow::saveFileAs() {
 
 void MainWindow::openFile(const QString& path) {
     QFile f(path);
-    if (!f.open(QIODevice::ReadOnly)) { QMessageBox::warning(this, "Open failed", "Could not read " + path); return; }
+    if (!f.open(QIODevice::ReadOnly)) { QMessageBox::warning(this, L("dlg.openFailed.title"), L("dlg.openFailed.text").arg(path)); return; }
     const QString abs = QFileInfo(path).absoluteFilePath();
     applyHighlighting(abs);
     editor_->setPlainText(QString::fromUtf8(f.readAll()));
@@ -691,7 +672,7 @@ void MainWindow::onPathRenamed(const QString& from, const QString& to) {
     s_.lastFile = file_; s_.save();
     applyHighlighting(file_);                    // the extension may have changed
     buildChrome(); updatePaneHeaders(); updateTitle(); renderPreview();
-    statusBar()->showMessage("Renamed to " + QFileInfo(file_).fileName(), 3000);
+    statusBar()->showMessage(L("status.renamed").arg(QFileInfo(file_).fileName()), 3000);
 }
 
 // The explorer deleted a file or folder: if the open file was in it, keep the text but make it an unsaved buffer.
@@ -701,7 +682,7 @@ void MainWindow::onPathRemoved(const QString& path) {
     if (!editor_->document()->isEmpty()) editor_->document()->setModified(true);
     applyHighlighting(QString());
     buildChrome(); updatePaneHeaders(); updateTitle(); renderPreview();
-    statusBar()->showMessage("The open file was deleted - its text is still here, Save to keep it", 6000);
+    statusBar()->showMessage(L("status.fileDeleted"), 6000);
 }
 
 void MainWindow::showEvent(QShowEvent* e) {
@@ -844,7 +825,7 @@ void MainWindow::newFile() {
 }
 
 void MainWindow::exportHtml() {
-    const QString p = QFileDialog::getSaveFileName(this, "Export HTML", "export.html", "HTML (*.html)");
+    const QString p = QFileDialog::getSaveFileName(this, L("dlg.exportHtml"), "export.html", "HTML (*.html)");
     if (p.isEmpty()) return;
     QFile f(p);
     if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) return;
@@ -853,7 +834,7 @@ void MainWindow::exportHtml() {
     f.write(("<!doctype html><html><head><meta charset=\"utf-8\"><title>MakDown export</title><style>" + previewCss(theme_) +
              "body{background:" + theme_.color("editorBg") + ";max-width:" + QString::number(theme_.pageWidth) + "px;margin:2em auto;}</style></head>" +
              body.mid(body.indexOf("<body>")) + "</html>").toUtf8());
-    statusBar()->showMessage("Exported " + p, 3000);
+    statusBar()->showMessage(L("status.exported").arg(p), 3000);
 }
 
 void MainWindow::closeEvent(QCloseEvent* e) {
@@ -884,9 +865,9 @@ void MainWindow::openSettings() {
 }
 
 void MainWindow::showAbout() {
-    QMessageBox::about(this, "About MakDown",
-        "<h2>MakDown</h2><p>Markdown editor &amp; previewer, but fancier.</p>"
-        "<p>MIT License &copy; 2026 nottwm</p>"
+    QMessageBox::about(this, L("about.title"),
+        "<h2>MakDown</h2><p>" + L("about.tagline") + "</p>"
+        "<p>" + L("about.license") + "</p>"
         "<pre>" + makdownBuildInfo().toHtmlEscaped() + "</pre>");
 }
 
@@ -900,7 +881,7 @@ void MainWindow::runCommand(const QString& text) {
     const QChar p = text[0];
     const QString arg = text.mid(1).trimmed();
     if (p == '/') {
-        if (!editor_->findNext(arg)) statusBar()->showMessage("Pattern not found: " + arg, 3000);
+        if (!editor_->findNext(arg)) statusBar()->showMessage(L("status.patternNotFound").arg(arg), 3000);
         return;
     }
     // ---- ":" ex commands
@@ -910,7 +891,7 @@ void MainWindow::runCommand(const QString& text) {
     else if (arg == "wq" || arg == "x")       { if (saveFile()) close(); }
     else if (arg == "q!" )                    { editor_->document()->setModified(false); close(); }
     else if (arg == "q" || arg == "quit") {
-        if (editor_->document()->isModified()) statusBar()->showMessage("No write since last change (add ! to override)", 4000);
+        if (editor_->document()->isModified()) statusBar()->showMessage(L("status.noWrite"), 4000);
         else close();
     }
     else if (arg == "set vim" || arg == "set novim") { s_.vim = arg == "set vim"; applyAll(); }
@@ -919,16 +900,16 @@ void MainWindow::runCommand(const QString& text) {
     else if (arg.startsWith("theme ")) {
         const QString n = arg.mid(6).trimmed();
         for (const Theme& t : themes_) if (t.name.compare(n, Qt::CaseInsensitive) == 0) { s_.theme = t.name; applyAll(); return; }
-        statusBar()->showMessage("Unknown theme: " + n, 3000);
+        statusBar()->showMessage(L("status.unknownTheme").arg(n), 3000);
     }
-    else statusBar()->showMessage("Not an editor command: " + arg, 3000);
+    else statusBar()->showMessage(L("status.notCommand").arg(arg), 3000);
 }
 
 // ---------------------------------------------------------------------------------------------
 // explorer + browser tabs
 // ---------------------------------------------------------------------------------------------
 void MainWindow::chooseFolder() {
-    const QString d = QFileDialog::getExistingDirectory(this, "Open folder", explorer_->root());
+    const QString d = QFileDialog::getExistingDirectory(this, L("dlg.openFolder"), explorer_->root());
     if (!d.isEmpty()) openFolder(d);
 }
 
@@ -956,14 +937,14 @@ void MainWindow::syncExplorerFor(const QString& path) {
 void MainWindow::openAnyFile(const QString& path) {
     if (isPreviewable(path)) { openMedia(path); return; }                 // images / sound: preview tab, like VS Code
     if (QFileInfo(path).size() > 20 * 1024 * 1024) {
-        QMessageBox::information(this, "MakDown", "That file is larger than 20 MB; not opening it in the editor.");
+        QMessageBox::information(this, "MakDown", L("dlg.tooLarge"));
         return;
     }
     if (isBinaryFile(path)) {                    // warn: the text editor would show garbage and saving would corrupt the file
-        QMessageBox box(QMessageBox::Warning, "Binary file", "\"" + QFileInfo(path).fileName() + "\" looks like a binary file.", QMessageBox::NoButton, this);
-        box.setInformativeText("Opening it in the text editor shows unreadable characters, and saving it from here would damage it.");
-        QPushButton* sys = box.addButton("Open with default app", QMessageBox::AcceptRole);
-        QPushButton* ed = box.addButton("Open in editor anyway", QMessageBox::DestructiveRole);
+        QMessageBox box(QMessageBox::Warning, L("dlg.binary.title"), L("dlg.binary.text").arg(QFileInfo(path).fileName()), QMessageBox::NoButton, this);
+        box.setInformativeText(L("dlg.binary.info"));
+        QPushButton* sys = box.addButton(L("dlg.binary.openDefault"), QMessageBox::AcceptRole);
+        QPushButton* ed = box.addButton(L("dlg.binary.openEditor"), QMessageBox::DestructiveRole);
         box.addButton(QMessageBox::Cancel);
         box.setDefaultButton(sys);
         box.exec();
@@ -977,12 +958,12 @@ void MainWindow::openAnyFile(const QString& path) {
 BrowserTab* MainWindow::addBrowserTab() {
     auto* tab = new BrowserTab;
     tab->setLiveReload(s_.liveReload);
-    const int idx = rightTabs_->addTab(tab, "Browser");
+    const int idx = rightTabs_->addTab(tab, L("tab.browser"));
     connect(tab, &BrowserTab::titleChanged, this, [this, tab](const QString& title) {
         const int i = rightTabs_->indexOf(tab);
         if (i < 0) return;
         QString t = title.size() > 22 ? title.left(21) + "\u2026" : title;
-        rightTabs_->setTabText(i, t.isEmpty() ? QString("Browser") : t.replace("&", "&&"));
+        rightTabs_->setTabText(i, t.isEmpty() ? L("tab.browser") : t.replace("&", "&&"));
     });
     connect(tab, &BrowserTab::liveToggled, this, [this](bool on) {
         s_.liveReload = on;                      // the Live button is global: applyAll() syncs the other tabs
@@ -1027,7 +1008,7 @@ void MainWindow::openGitTab() { revealSidebar(); sidebar_->showPage(Sidebar::Git
 
 void MainWindow::newBrowserTab() {
     if (!BrowserTab::available()) {
-        statusBar()->showMessage("This build has no QtWebEngine - see Documentation/building.md", 6000);
+        statusBar()->showMessage(L("status.noWebEngine"), 6000);
         return;
     }
     addBrowserTab()->focusAddressBar();
@@ -1043,15 +1024,14 @@ void MainWindow::openInBrowser(const QString& pathIn) {
         } else if (!index.isEmpty()) {
             path = index;
         } else {
-            path = QFileDialog::getOpenFileName(this, "Open page", explorer_->root(),
-                                                "Web pages (*.html *.htm *.xhtml *.svg);;All files (*)");
+            path = QFileDialog::getOpenFileName(this, L("dlg.openPage"), explorer_->root(),
+                                                L("filter.webPages") + " (*.html *.htm *.xhtml *.svg);;" + L("filter.all") + " (*)");
             if (path.isEmpty()) return;
         }
     }
     if (!BrowserTab::available()) {
         QDesktopServices::openUrl(QUrl::fromLocalFile(path));
-        statusBar()->showMessage("This build has no QtWebEngine - opened in the system browser "
-                                 "(see Documentation/building.md)", 6000);
+        statusBar()->showMessage(L("status.noWebEngineOpened"), 6000);
         return;
     }
     const QString abs = QFileInfo(path).absoluteFilePath();

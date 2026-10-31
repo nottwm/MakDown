@@ -1,5 +1,6 @@
 // browsertab.cpp - browser tab with live reload. All QtWebEngine use sits behind MAKDOWN_WEBENGINE.
 #include <makdown/ui/browsertab.h>
+#include <makdown/core/lang.h>
 
 #include <QDesktopServices>
 #include <QDir>
@@ -73,20 +74,20 @@ BrowserTab::BrowserTab(QWidget* parent) : QWidget(parent) {
     h->setContentsMargins(8, 6, 8, 6);
     h->setSpacing(6);
 
-    back_ = new QToolButton;   back_->setText("\u25C0");   back_->setToolTip("Back");
-    fwd_ = new QToolButton;    fwd_->setText("\u25B6");    fwd_->setToolTip("Forward");
-    reload_ = new QToolButton; reload_->setText("\u21BB"); reload_->setToolTip("Reload (bypasses the cache)");
+    back_ = new QToolButton;   back_->setText("\u25C0");   back_->setToolTip(L("browser.back"));
+    fwd_ = new QToolButton;    fwd_->setText("\u25B6");    fwd_->setToolTip(L("browser.forward"));
+    reload_ = new QToolButton; reload_->setText("\u21BB"); reload_->setToolTip(L("browser.reload"));
     back_->setEnabled(false);
     fwd_->setEnabled(false);
 
     address_ = new QLineEdit;
-    address_->setPlaceholderText("File path, folder or URL - Enter to open");
+    address_->setPlaceholderText(L("browser.address"));
 
     live_ = new QToolButton;
-    live_->setText("Live");
+    live_->setText(L("browser.liveButton"));
     live_->setCheckable(true);
     live_->setChecked(true);
-    live_->setToolTip("Reload automatically when the page or its .html / .js / .css files change");
+    live_->setToolTip(L("browser.liveTip"));
 
     info_ = new QLabel;
     info_->setObjectName("pill");
@@ -127,8 +128,7 @@ BrowserTab::BrowserTab(QWidget* parent) : QWidget(parent) {
         trackResources();
     });
 #else
-    auto* msg = new QLabel("This MakDown build has no QtWebEngine, so there is no built-in browser.\n"
-                           "See Documentation/building.md to enable it.");
+    auto* msg = new QLabel(L("browser.noEngine"));
     msg->setWordWrap(true);
     msg->setMargin(24);
     v->addWidget(msg, 1);
@@ -158,7 +158,7 @@ void BrowserTab::openTarget(const QString& input) {
                 if (QFileInfo::exists(p)) { local = p; break; }
             }
             if (local.isEmpty()) {
-                info_->setText("no index.html in that folder");
+                info_->setText(L("browser.noIndex"));
                 info_->show();
                 return;
             }
@@ -169,7 +169,7 @@ void BrowserTab::openTarget(const QString& input) {
     if (!local.isEmpty()) url = QUrl::fromLocalFile(local);
     else if (url.isEmpty()) url = QUrl::fromUserInput(s);     // "localhost:3000" -> http://localhost:3000
     if (!url.isValid()) {
-        info_->setText("invalid address");
+        info_->setText(L("browser.invalidAddress"));
         info_->show();
         return;
     }
@@ -241,7 +241,7 @@ void BrowserTab::rescan() {
         return;
     }
     if (!live_->isChecked()) {
-        info_->setText("live reload off");
+        info_->setText(L("browser.liveOff"));
         info_->show();
         return;
     }
@@ -251,7 +251,7 @@ void BrowserTab::rescan() {
         if (QFileInfo::exists(e) && !files.contains(e)) files << e;
     watcher_->addPaths(dirs);
     watcher_->addPaths(files);
-    info_->setText(QString("watching %1 files").arg(watcher_->files().size()));
+    info_->setText(Ln("browser.watching", watcher_->files().size()));
     info_->show();
 }
 

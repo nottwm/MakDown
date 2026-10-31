@@ -1,5 +1,6 @@
 // titlebar.cpp - custom window frame widgets: title bar, caption buttons, themed border.
 #include <makdown/ui/titlebar.h>
+#include <makdown/core/lang.h>
 #include <QApplication>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -71,7 +72,7 @@ TitleBar::TitleBar(QWidget* parent) : QFrame(parent) {
 
     min_ = new CaptionButton(CaptionButton::Minimize); max_ = new CaptionButton(CaptionButton::Maximize);
     close_ = new CaptionButton(CaptionButton::Close);
-    min_->setToolTip("Minimize"); max_->setToolTip("Maximize"); close_->setToolTip("Close");
+    min_->setToolTip(L("win.minimize")); max_->setToolTip(L("win.maximize")); close_->setToolTip(L("win.close"));
     for (CaptionButton* b : {min_, max_, close_}) l->addWidget(b);
     setCustomFrame(false);
 }
@@ -83,7 +84,7 @@ void TitleBar::setCustomFrame(bool on) {
 
 void TitleBar::setMaximized(bool on) {
     max_->setKind(on ? CaptionButton::Restore : CaptionButton::Maximize);
-    max_->setToolTip(on ? "Restore" : "Maximize");
+    max_->setToolTip(on ? L("win.restore") : L("win.maximize"));
 }
 
 void TitleBar::applyTheme(const Theme& t) {

@@ -22,6 +22,7 @@ private:
     QWidget* buildEditorPage();
     QWidget* buildPreviewPage();
     QWidget* buildAnimationsPage();
+    QWidget* buildLanguagePage();
     QWidget* buildAboutPage();
     QCheckBox* addCheck(QVBoxLayout* l, const QString& text, const QString& hint, bool* target);
 

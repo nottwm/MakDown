@@ -1,5 +1,6 @@
 // mediatab.cpp - see include/makdown/ui/mediatab.h
 #include <makdown/ui/mediatab.h>
+#include <makdown/core/lang.h>
 #include <makdown/core/anim.h>
 #include <makdown/ui/fx.h>
 #include <QFileInfo>
@@ -38,9 +39,9 @@ QString fmtTime(qint64 ms) {
                      : QString("%1:%2").arg(s / 60).arg(s % 60, 2, 10, QChar('0'));
 }
 QString fmtSize(qint64 b) {
-    if (b < 1024) return QString("%1 B").arg(b);
-    if (b < 1024 * 1024) return QString("%1 KB").arg(b / 1024.0, 0, 'f', 1);
-    return QString("%1 MB").arg(b / 1048576.0, 0, 'f', 1);
+    if (b < 1024) return L("unit.b").arg(b);
+    if (b < 1024 * 1024) return L("unit.kb").arg(b / 1024.0, 0, 'f', 1);
+    return L("unit.mb").arg(b / 1048576.0, 0, 'f', 1);
 }
 
 // the picture on a checkerboard (so transparency is visible), drawn at the current zoom
@@ -136,15 +137,15 @@ MediaTab::MediaTab(const QString& path, QWidget* parent) : QWidget(parent), path
             auto* b = new QToolButton; b->setText(t); b->setToolTip(tip); b->setAutoRaise(true); connect(b, &QToolButton::clicked, this, fn); h->addWidget(b);
         };
         d_->zoomLbl = new QLabel; d_->zoomLbl->setMinimumWidth(48); d_->zoomLbl->setAlignment(Qt::AlignCenter); h->addWidget(d_->zoomLbl);
-        mk("\u2212", "Zoom out", [this] { d_->fit = false; setZoom(d_->canvas->zoom / 1.25); });
-        mk("+", "Zoom in (Ctrl+wheel)", [this] { d_->fit = false; setZoom(d_->canvas->zoom * 1.25); });
-        mk("Fit", "Fit to window", [this] { fitToWindow(); });
-        mk("100%", "Actual size", [this] { d_->fit = false; setZoom(1.0); });
+        mk("\u2212", L("media.zoomOut"), [this] { d_->fit = false; setZoom(d_->canvas->zoom / 1.25); });
+        mk("+", L("media.zoomIn"), [this] { d_->fit = false; setZoom(d_->canvas->zoom * 1.25); });
+        mk(L("media.fit"), L("media.fitTip"), [this] { fitToWindow(); });
+        mk("100%", L("media.actualSize"), [this] { d_->fit = false; setZoom(1.0); });
         v->addWidget(d_->scroll, 1);
     } else if (kind_ == Audio) {
         buildAudio();
     } else {
-        d_->info->setText("This file can't be previewed.");
+        d_->info->setText(L("media.noPreview"));
     }
 }
 
@@ -179,7 +180,7 @@ void MediaTab::buildImage() {
         d_->canvas->pm = QPixmap::fromImage(r.read());
         if (d_->canvas->pm.isNull()) d_->canvas->pm = QPixmap(path_);
     }
-    if (d_->canvas->pm.isNull()) { d_->info->setText("Can't read this image."); d_->canvas->pm = QPixmap(1, 1); }
+    if (d_->canvas->pm.isNull()) { d_->info->setText(L("media.cantRead")); d_->canvas->pm = QPixmap(1, 1); }
     else d_->info->setText(QString("%1 \u00D7 %2  \u00B7  %3  \u00B7  %4").arg(d_->canvas->pm.width()).arg(d_->canvas->pm.height())
                            .arg(fmt.isEmpty() ? QFileInfo(path_).suffix().toUpper() : fmt, fmtSize(QFileInfo(path_).size())));
     Q_UNUSED(sz);
@@ -264,9 +265,9 @@ void MediaTab::buildAudio() {
     col->addLayout(seekRow);
 
     auto* ctl = new QHBoxLayout; ctl->setSpacing(8);
-    d_->loop = new QPushButton("\u21BB"); d_->loop->setCheckable(true); d_->loop->setToolTip("Repeat"); d_->loop->setFixedWidth(40);
-    d_->play = new QPushButton("\u25B6"); d_->play->setFixedSize(64, 38); d_->play->setToolTip("Play / pause (Space)");
-    d_->mute = new QPushButton("\u266A"); d_->mute->setCheckable(true); d_->mute->setToolTip("Mute"); d_->mute->setFixedWidth(40);
+    d_->loop = new QPushButton("\u21BB"); d_->loop->setCheckable(true); d_->loop->setToolTip(L("media.repeat")); d_->loop->setFixedWidth(40);
+    d_->play = new QPushButton("\u25B6"); d_->play->setFixedSize(64, 38); d_->play->setToolTip(L("media.playPause"));
+    d_->mute = new QPushButton("\u266A"); d_->mute->setCheckable(true); d_->mute->setToolTip(L("media.mute")); d_->mute->setFixedWidth(40);
     d_->vol = new QSlider(Qt::Horizontal); d_->vol->setRange(0, 100); d_->vol->setValue(80); d_->vol->setFixedWidth(110);
     ctl->addStretch(1); ctl->addWidget(d_->loop); ctl->addWidget(d_->play); ctl->addWidget(d_->mute); ctl->addWidget(d_->vol); ctl->addStretch(1);
     col->addLayout(ctl);
@@ -297,7 +298,7 @@ void MediaTab::buildAudio() {
         d_->bars->playing = (s == QMediaPlayer::PlayingState); d_->bars->sync();
     });
     connect(d_->player, &QMediaPlayer::errorOccurred, this, [this](QMediaPlayer::Error, const QString& msg) {
-        d_->sub->setText("Can't play this file" + (msg.isEmpty() ? QString() : ": " + msg));
+        d_->sub->setText(L("media.cantPlay") + (msg.isEmpty() ? QString() : ": " + msg));
     });
     connect(d_->player, &QMediaPlayer::metaDataChanged, this, [this] {
         const QMediaMetaData md = d_->player->metaData();

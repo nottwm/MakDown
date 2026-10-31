@@ -1,6 +1,7 @@
 // explorer.cpp - folder tree on the left. Double-click opens a file in the editor; the context
 // menu adds "open in browser tab", new file / folder, rename (F2), delete (Del) and "show in file manager".
 #include <makdown/ui/explorer.h>
+#include <makdown/core/lang.h>
 
 #include <QAbstractItemView>
 #include <QDesktopServices>
@@ -25,7 +26,7 @@ FileExplorer::FileExplorer(QWidget* parent) : QWidget(parent) {
     v->setContentsMargins(0, 0, 0, 0);
     v->setSpacing(0);
 
-    header_ = new QLabel("EXPLORER");
+    header_ = new QLabel(L("explorer.header"));
     header_->setObjectName("paneHeader");
     header_->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);   // long folder names must not widen the pane
     v->addWidget(header_);
@@ -85,7 +86,7 @@ void FileExplorer::setRoot(const QString& dir) {
     if (!fi.isDir()) return;
     root_ = fi.absoluteFilePath();
     tree_->setRootIndex(model_->setRootPath(root_));
-    header_->setText("EXPLORER  \u00B7  " + (fi.fileName().isEmpty() ? root_ : fi.fileName()));
+    header_->setText(L("explorer.header") + "  \u00B7  " + (fi.fileName().isEmpty() ? root_ : fi.fileName()));
     header_->setToolTip(QDir::toNativeSeparators(root_));
 }
 
@@ -109,25 +110,25 @@ void FileExplorer::contextMenu(const QPoint& pos) {
     QMenu m(this);
     QAction *open = nullptr, *browse = nullptr, *browseIndex = nullptr, *preview = nullptr;
     if (!isDir) {
-        if (MediaTab::kindOf(path) != MediaTab::None) preview = m.addAction("Preview");
-        open = m.addAction("Open in editor");
-        browse = m.addAction("Open in browser tab");
+        if (MediaTab::kindOf(path) != MediaTab::None) preview = m.addAction(L("ctx.preview"));
+        open = m.addAction(L("ctx.openEditor"));
+        browse = m.addAction(L("ctx.openBrowser"));
         m.addSeparator();
     } else if (!index.isEmpty()) {
-        browseIndex = m.addAction("Open index.html in browser tab");
+        browseIndex = m.addAction(L("ctx.openIndex"));
         m.addSeparator();
     }
-    QAction* newFile = m.addAction("New file...");
-    QAction* newDir = m.addAction("New folder...");
+    QAction* newFile = m.addAction(L("ctx.newFile"));
+    QAction* newDir = m.addAction(L("ctx.newFolder"));
     QAction *rename = nullptr, *del = nullptr;
     if (i.isValid()) {                                         // not for the empty area / the root itself
         m.addSeparator();
-        rename = m.addAction("Rename...");  rename->setShortcut(QKeySequence(Qt::Key_F2));
-        del = m.addAction("Delete");        del->setShortcut(QKeySequence(Qt::Key_Delete));
+        rename = m.addAction(L("ctx.rename"));  rename->setShortcut(QKeySequence(Qt::Key_F2));
+        del = m.addAction(L("ctx.delete"));        del->setShortcut(QKeySequence(Qt::Key_Delete));
     }
     m.addSeparator();
-    QAction* show = m.addAction("Show in file manager");
-    QAction* change = m.addAction("Open folder...");
+    QAction* show = m.addAction(L("ctx.showInManager"));
+    QAction* change = m.addAction(L("ctx.openFolder"));
 
     QAction* a = m.exec(tree_->viewport()->mapToGlobal(pos));
     if (!a) return;
@@ -145,22 +146,22 @@ void FileExplorer::contextMenu(const QPoint& pos) {
 
 void FileExplorer::createEntry(const QString& dir, bool folder) {
     bool ok = false;
-    const QString name = QInputDialog::getText(this, folder ? "New folder" : "New file", "Name:", QLineEdit::Normal,
+    const QString name = QInputDialog::getText(this, folder ? L("explorer.newFolder") : L("explorer.newFile"), L("explorer.name"), QLineEdit::Normal,
                                                folder ? QString() : QStringLiteral("untitled.md"), &ok).trimmed();
     if (!ok || name.isEmpty()) return;
     if (!validName(name)) return;
     const QString p = QDir(dir).filePath(name);
     if (QFileInfo::exists(p)) {
-        QMessageBox::warning(this, "MakDown", "\"" + name + "\" already exists.");
+        QMessageBox::warning(this, "MakDown", L("explorer.exists").arg(name));
         return;
     }
     if (folder) {
-        if (!QDir().mkdir(p)) QMessageBox::warning(this, "MakDown", "Could not create the folder.");
+        if (!QDir().mkdir(p)) QMessageBox::warning(this, "MakDown", L("explorer.mkdirFail"));
         return;
     }
     QFile f(p);
     if (!f.open(QIODevice::WriteOnly)) {
-        QMessageBox::warning(this, "MakDown", "Could not create the file:\n" + f.errorString());
+        QMessageBox::warning(this, "MakDown", L("explorer.createFail").arg(f.errorString()));
         return;
     }
     f.close();
@@ -170,10 +171,10 @@ void FileExplorer::createEntry(const QString& dir, bool folder) {
 bool FileExplorer::validName(const QString& name) {
     static const QString bad = QStringLiteral("<>:\"|?*");     // not allowed on Windows; avoids surprises when sharing folders
     bool ok = !(name == "." || name == ".." || name.contains('/') || name.contains('\\'));
-    if (!ok) { QMessageBox::warning(this, "MakDown", "The name must not contain path separators."); return false; }
+    if (!ok) { QMessageBox::warning(this, "MakDown", L("explorer.badSeparator")); return false; }
 #ifdef Q_OS_WIN
     for (const QChar c : bad) if (name.contains(c)) {
-        QMessageBox::warning(this, "MakDown", QString("The name must not contain any of: ") + bad);
+        QMessageBox::warning(this, "MakDown", L("explorer.badChars").arg(bad));
         return false;
     }
 #else
@@ -186,17 +187,17 @@ void FileExplorer::renameEntry(const QString& path) {
     const QFileInfo fi(path);
     if (!fi.exists() || contains(path, root_)) return;            // never rename the root or one of its parents
     bool ok = false;
-    const QString name = QInputDialog::getText(this, "Rename", "New name:", QLineEdit::Normal, fi.fileName(), &ok).trimmed();
+    const QString name = QInputDialog::getText(this, L("explorer.rename"), L("explorer.newName"), QLineEdit::Normal, fi.fileName(), &ok).trimmed();
     if (!ok || name.isEmpty() || name == fi.fileName()) return;
     if (!validName(name)) return;
     const QString target = fi.absoluteDir().filePath(name);
     // a case-only change ("readme.md" -> "README.md") "exists" on case-insensitive file systems: that is fine
     if (QFileInfo::exists(target) && name.compare(fi.fileName(), Qt::CaseInsensitive) != 0) {
-        QMessageBox::warning(this, "MakDown", "\"" + name + "\" already exists.");
+        QMessageBox::warning(this, "MakDown", L("explorer.exists").arg(name));
         return;
     }
     if (!QDir().rename(fi.absoluteFilePath(), target)) {
-        QMessageBox::warning(this, "MakDown", "Could not rename \"" + fi.fileName() + "\".");
+        QMessageBox::warning(this, "MakDown", L("explorer.renameFail").arg(fi.fileName()));
         return;
     }
     const QString newPath = QDir::cleanPath(target);
@@ -208,21 +209,20 @@ void FileExplorer::deleteEntry(const QString& path) {
     const QFileInfo fi(path);
     if (!fi.exists() || contains(path, root_)) return;
     const bool dir = fi.isDir() && !fi.isSymLink();
-    QMessageBox box(QMessageBox::Question, "Delete",
-                    "Delete \"" + fi.fileName() + "\"" + (dir ? " and everything inside it?" : "?"),
+    QMessageBox box(QMessageBox::Question, L("explorer.delete"),
+                    (dir ? L("explorer.deleteDir") : L("explorer.deleteFile")).arg(fi.fileName()),
                     QMessageBox::Yes | QMessageBox::Cancel, this);
-    box.setInformativeText("It will be moved to the trash.");
+    box.setInformativeText(L("explorer.trashInfo"));
     box.setDefaultButton(QMessageBox::Cancel);
     if (box.exec() != QMessageBox::Yes) return;
 
     bool gone = QFile::moveToTrash(fi.absoluteFilePath());
     if (!gone) {                                                  // no trash available (some Linux setups, network drives)
-        const auto r = QMessageBox::warning(this, "Delete", "Could not move \"" + fi.fileName() + "\" to the trash.\n"
-                                            "Delete it permanently? This cannot be undone.",
+        const auto r = QMessageBox::warning(this, L("explorer.delete"), L("explorer.trashFail").arg(fi.fileName()),
                                             QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
         if (r != QMessageBox::Yes) return;
         gone = dir ? QDir(fi.absoluteFilePath()).removeRecursively() : QFile::remove(fi.absoluteFilePath());
-        if (!gone) { QMessageBox::warning(this, "MakDown", "Could not delete \"" + fi.fileName() + "\"."); return; }
+        if (!gone) { QMessageBox::warning(this, "MakDown", L("explorer.deleteFail").arg(fi.fileName())); return; }
     }
     emit pathRemoved(QDir::cleanPath(fi.absoluteFilePath()));
 }

@@ -1,5 +1,6 @@
 // console.cpp - see include/makdown/ui/console.h
 #include <makdown/ui/console.h>
+#include <makdown/core/lang.h>
 #include <makdown/core/anim.h>
 #include <makdown/core/buildinfo.h>
 #include <QCoreApplication>
@@ -23,14 +24,14 @@ ConsolePanel::ConsolePanel(QWidget* parent) : QWidget(parent) {
 
     auto* head = new QWidget; head->setObjectName("consoleHead");
     auto* h = new QHBoxLayout(head); h->setContentsMargins(12, 3, 6, 3); h->setSpacing(2);
-    title_ = new QLabel("Console"); title_->setObjectName("consoleTitle"); h->addWidget(title_, 1);
+    title_ = new QLabel(L("console.title")); title_->setObjectName("consoleTitle"); h->addWidget(title_, 1);
     auto mk = [&](const QString& t, const QString& tip, auto fn) {
         auto* b = new QToolButton; b->setText(t); b->setToolTip(tip); b->setAutoRaise(true);
         connect(b, &QToolButton::clicked, this, fn); h->addWidget(b);
     };
-    mk("Clear", "Clear the output", [this] { clearOutput(); });
-    mk("Restart", "Kill the shell and start a new one", [this] { restart(); });
-    mk("\u2715", "Hide the console (Ctrl+`)", [this] { emit closeRequested(); });
+    mk(L("console.clear"), L("console.clearTip"), [this] { clearOutput(); });
+    mk(L("console.restart"), L("console.restartTip"), [this] { restart(); });
+    mk("\u2715", L("console.hideTip"), [this] { emit closeRequested(); });
     v->addWidget(head);
 
     out_ = new QPlainTextEdit; out_->setObjectName("consoleOut"); out_->setReadOnly(true);
@@ -39,7 +40,7 @@ ConsolePanel::ConsolePanel(QWidget* parent) : QWidget(parent) {
     v->addWidget(out_, 1);
 
     in_ = new QLineEdit; in_->setObjectName("consoleIn"); in_->setFrame(false);
-    in_->setPlaceholderText("type a command and press Enter  \u00B7  Ctrl+C interrupts  \u00B7  Ctrl+L clears");
+    in_->setPlaceholderText(L("console.placeholder"));
     in_->installEventFilter(this);
     v->addWidget(in_);
     connect(in_, &QLineEdit::returnPressed, this, [this] { sendLine(); });
@@ -122,15 +123,15 @@ void ConsolePanel::startShell() {
     proc_->setProcessEnvironment(env);
     connect(proc_, &QProcess::readyRead, this, [this] { onOutput(); });
     connect(proc_, &QProcess::errorOccurred, this, [this](QProcess::ProcessError e) {
-        if (e == QProcess::FailedToStart) feed("\r\n[could not start the shell]\r\n");
+        if (e == QProcess::FailedToStart) feed("\r\n" + L("console.noShell") + "\r\n");
     });
     connect(proc_, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this, [this](int code, QProcess::ExitStatus) {
         exited_ = true;
-        feed(QString("\r\n[shell exited with code %1 - press Enter or Restart to start a new one]\r\n").arg(code));
+        feed("\r\n" + L("console.exited").arg(code) + "\r\n");
     });
     mdLog("console: " + program + " " + args.join(' ') + "  (cwd " + cwd + ")");
     proc_->start(program, args);
-    title_->setText(QString("Console  \u00B7  %1  \u00B7  %2").arg(shellName_, QDir::toNativeSeparators(cwd)));
+    title_->setText(L("console.titleFull").arg(shellName_, QDir::toNativeSeparators(cwd)));
 }
 
 void ConsolePanel::restart() { clearOutput(); startShell(); focusInput(); }

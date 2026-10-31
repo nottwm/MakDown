@@ -64,6 +64,7 @@ namespace ThemeStore {
 // Persisted user settings (not part of a theme). Stored as <home>/settings.jsonc
 struct AppSettings {
     QString theme = "GitHub";
+    QString language = "auto";    // interface language: "auto" (follow the OS) or a code from <home>/lang (see core/lang.h)
     bool vim = false;              // "vimkeys": vim modal editing + extra hotkeys
     bool lineNumbers = true;
     bool paragraphMarks = false;   // Word-style pilcrows (¶) at the end of every paragraph

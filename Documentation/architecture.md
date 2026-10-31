@@ -10,6 +10,8 @@
     │   ├── markdown.cpp       markdown -> rich-text renderer
     │   ├── syntax.cpp         syntax packs: load / match (<home>/syntax/*.json)
     │   ├── syntaxstock.cpp    the stock packs (c, cpp, makefile, ld, rust, bash, batch, html, python, css, js) as JSON strings
+    │   ├── lang.cpp           interface languages: <home>/lang/*.json, L("key") lookup with English fallback, plural rules
+    │   ├── langstock.cpp      GENERATED from lang/*.json by scripts/gen-lang.py (the stock languages en, ru, pl)
     │   ├── search.cpp         search helpers: regex builder, file walker, per-file search, fuzzy score, globs
     │   ├── anim.cpp           the global animation level (Settings > Animations)
     │   ├── appicon.cpp        GENERATED: assets/icon.png embedded (scripts/gen-icon.py)
@@ -34,8 +36,9 @@
     │   ├── unx/platform.cpp   Linux/macOS: paths (custom-frame hooks are no-ops)
     │   └── win/               platform.cpp (paths, debug console, custom window frame via Win32/DWM), makdown.rc (exe icon)
     ├── include/makdown/       public headers, mirrors the source dirs (core/ ui/ arch/)
+    ├── lang/                  stock interface languages (source of core/langstock.cpp)
     ├── assets/                icon.png (source), icon.ico (Windows exe icon)
     ├── Documentation/         building, presets, syntax, hotkeys, example preset
-    └── scripts/               helper scripts (check-deps.sh, deploy-win.sh)
+    └── scripts/               helper scripts (check-deps.sh, deploy-win.sh, gen-icon.py, gen-lang.py)
 
 Rule of thumb: anything OS-specific goes behind `include/makdown/arch/platform.h`; `core/` never includes `ui/`.

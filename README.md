@@ -22,6 +22,7 @@ make debug    # build + run with the compiler / build-date / arch banner
 - [Hotkeys](#hotkeys)
 - [Themes and presets](#themes-and-presets)
 - [Syntax highlighting packs](#syntax-highlighting-packs)
+- [Interface languages](#interface-languages)
 - [Configuration and data locations](#configuration-and-data-locations)
 - [Project layout](#project-layout)
 - [Tests](#tests)
@@ -79,6 +80,9 @@ Editable JSON packs for **C, C++, Makefile, linker scripts, Rust, Bash, Batch, H
 
 ### Themes
 Stock presets: **GitHub, Windows 11, Warm** (each with a Dark variant), **VS Code Light/Dark**, **Glass Light/Dark**, **TTY, opencode, Gruvbox, Nord, Catppuccin**. Create your own as `.jsonc` files or with the in-app theme editor.
+
+### Interface languages
+**English, Russian and Polish** out of the box, picked in Settings > Language (default: follow the OS language). Languages are plain `.json` files, so adding another one means copying `en.json` and translating it. See [`languages.md`](Documentation/languages.md).
 
 ### Custom window frame (Windows)
 MakDown draws its own **title bar** (icon, menus, minimise / maximise / close) and a **themed window border** that changes between focused and unfocused. Resizing, Aero Snap, the shadow and Windows 11 rounded corners stay native. Toggle in Settings > Appearance, or run with `--native-frame`. See [`window-frame.md`](Documentation/window-frame.md).
@@ -295,6 +299,18 @@ More: [`Documentation/syntax.md`](Documentation/syntax.md).
 
 ---
 
+## Interface languages
+
+Every menu, dialog, tooltip and message is looked up in a language file: `<home>/lang/*.json`. `en.json`, `ru.json` and `pl.json` are written on first launch. **Settings > Language** switches (after a restart); *System default* follows the OS language. To add one, copy `en.json`, rename it (`de.json`), translate the values and restart; missing keys fall back to English.
+
+```json
+{ "name": "Polski", "plural": "polish", "strings": { "menu.file": "&Plik", "status.words": ["%n słowo", "%n słowa", "%n słów"] } }
+```
+
+More: [`Documentation/languages.md`](Documentation/languages.md).
+
+---
+
 ## Configuration and data locations
 
 | | Linux / macOS | Windows |
@@ -302,6 +318,7 @@ More: [`Documentation/syntax.md`](Documentation/syntax.md).
 | App home | `$HOME/.local/share/MakDown` | `%USERPROFILE%\AppData\Local\MakDown` |
 | Themes | `<home>/presets/*.jsonc` | `<home>\presets\*.jsonc` |
 | Syntax packs | `<home>/syntax/*.json` | `<home>\syntax\*.json` |
+| Languages | `<home>/lang/*.json` | `<home>\lang\*.json` |
 | Settings | `<home>/settings.jsonc` | `<home>\settings.jsonc` |
 
 Settings remember the explorer root, console visibility, view mode, theme, animation level, vim on/off, live reload and more.
@@ -319,6 +336,8 @@ MakDown/
 │   ├── markdown.cpp       Markdown -> rich-text renderer
 │   ├── syntax.cpp         syntax packs: load / match
 │   ├── syntaxstock.cpp    stock packs as JSON strings
+│   ├── lang.cpp           interface languages: load, lookup, plural rules
+│   ├── langstock.cpp      GENERATED from lang/*.json (scripts/gen-lang.py)
 │   ├── search.cpp         regex builder, file walker, fuzzy score, globs
 │   ├── anim.cpp           global animation level
 │   ├── appicon.cpp        GENERATED from assets/icon.png (scripts/gen-icon.py)
@@ -343,9 +362,10 @@ MakDown/
 │   ├── unx/               Linux/macOS platform code
 │   └── win/               Windows platform code + exe icon resource
 ├── include/makdown/       public headers, mirrors core/ ui/ arch/
+├── lang/                  stock interface languages (en, ru, pl) as .json
 ├── assets/                icon.png, icon.ico
 ├── Documentation/         per-feature docs + example preset
-└── scripts/               check-deps.sh, deploy-win.sh, gen-icon.py
+└── scripts/               check-deps.sh, deploy-win.sh, gen-icon.py, gen-lang.py
 ```
 
 Design rules:
@@ -387,6 +407,7 @@ Expected failures are known issues in the code. Known failures:
 | [`presets.md`](Documentation/presets.md) | Theme files, chrome flavours, fonts |
 | [`window-frame.md`](Documentation/window-frame.md) | Windows custom title bar and themed window border |
 | [`syntax.md`](Documentation/syntax.md) | Syntax pack format and scopes |
+| [`languages.md`](Documentation/languages.md) | Interface language files, adding a translation, plural rules |
 | [`hotkeys.md`](Documentation/hotkeys.md) | All shortcuts and vim keys |
 | [`search.md`](Documentation/search.md) | Find/replace, go to file, find in files |
 | [`browser.md`](Documentation/browser.md) | Side bar, explorer, browser tab, live reload |

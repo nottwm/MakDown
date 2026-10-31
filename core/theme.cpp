@@ -1,6 +1,7 @@
 // theme.cpp - presets on disk, stock palettes, QSS generation, app settings.
 #include <makdown/core/theme.h>
 #include <makdown/arch/platform.h>
+#include <makdown/core/lang.h>
 #include <QColor>
 #include <QDir>
 #include <QFile>
@@ -287,14 +288,9 @@ QList<Theme> ThemeStore::loadAll() {
 }
 
 QStringList ThemeStore::colorKeys() { return kColorKeys; }
-QString ThemeStore::colorLabel(const QString& k) {
-    static const QMap<QString, QString> m = {
-        {"bg","Window background"},{"panel","Panels / bars"},{"fg","Text"},{"muted","Muted text"},{"border","Borders"},
-        {"accent","Accent"},{"accentFg","Text on accent"},{"editorBg","Editor background"},{"editorFg","Editor text"},
-        {"gutterBg","Line-number gutter"},{"gutterFg","Line numbers"},{"lineHighlight","Current line"},{"selection","Selection"},
-        {"link","Links"},{"heading","Headings"},{"quoteBar","Quote bar"},{"codeBg","Code background"},{"codeFg","Code text"},
-        {"tableHeader","Table header"},{"frameBorder","Window border"},{"frameBorderInactive","Window border (inactive)"}};
-    return m.value(k, k);
+QString ThemeStore::colorLabel(const QString& k) {      // names come from the language files ("color.<key>")
+    const QString key = "color." + k, s = Lang::text(key);
+    return s == key ? k : s;
 }
 
 // ---------------------------------------------------------------------------
@@ -542,6 +538,7 @@ void AppSettings::load() {
     if (!d.isObject()) return;
     const QJsonObject o = d.object();
     theme = o["theme"].toString(theme);          vim = o["vim"].toBool(vim);
+    language = o["language"].toString(language);
     lineNumbers = o["lineNumbers"].toBool(lineNumbers);
     paragraphMarks = o["paragraphMarks"].toBool(paragraphMarks);
     showSpaces = o["showSpaces"].toBool(showSpaces);
@@ -560,7 +557,7 @@ void AppSettings::load() {
 
 void AppSettings::save() const {
     QJsonObject o;
-    o["theme"] = theme; o["vim"] = vim; o["lineNumbers"] = lineNumbers; o["paragraphMarks"] = paragraphMarks;
+    o["theme"] = theme; o["language"] = language; o["vim"] = vim; o["lineNumbers"] = lineNumbers; o["paragraphMarks"] = paragraphMarks;
     o["showSpaces"] = showSpaces; o["wrap"] = wrap; o["highlightLine"] = highlightLine;
     o["revealMarkers"] = revealMarkers; o["livePreview"] = livePreview; o["syncScroll"] = syncScroll;
     o["tabWidth"] = tabWidth; o["viewMode"] = viewMode; o["geometry"] = geometry; o["lastFile"] = lastFile;

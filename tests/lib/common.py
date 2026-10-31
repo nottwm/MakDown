@@ -37,6 +37,8 @@ def gui_env(home: str | None = None, extra: dict | None = None) -> dict:
     env["QT_QPA_PLATFORM"] = "offscreen"
     env["QT_LOGGING_RULES"] = "qt.qpa.fonts.warning=false"
     env.pop("MAKDOWN_DEBUG", None)
+    env["LC_ALL"] = "C.UTF-8"           # the interface language follows the OS locale ("auto"): keep the tests on English
+    env.pop("LANGUAGE", None)
     if home:
         env["HOME"] = home
         env["XDG_CONFIG_HOME"] = os.path.join(home, ".config")

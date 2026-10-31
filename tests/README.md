@@ -24,6 +24,7 @@ Everything runs headless (`QT_QPA_PLATFORM=offscreen`) with a temporary `$HOME`;
 | `test_40_search` | regex builder, text search, fuzzy file search, globs, binary sniffing, directory walker |
 | `test_50_syntax` | stock packs, parser, on-disk lifecycle, file matching, highlighter |
 | `test_60_theme` | presets, JSONC, generated QSS, settings, contrast |
+| `test_65_lang` | `lang/*.json`: same keys / placeholders / plural forms in every language, generated `langstock.cpp` in sync, lookup + fallback + plural rules, a real window in ru / pl |
 | `test_70_editor` | formatting helpers, list continuation, vim engine, key-storm fuzzing |
 | `test_80_window` | whole `MainWindow` in-process: opening files, live preview, dialogs |
 | `test_90_release` | release gate (only with `--release`) |

@@ -29,7 +29,7 @@ from lib.common import ROOT, run  # noqa: E402
 
 GROUPS = {
     "static": ["test_00_repo"],
-    "unit": ["test_30_markdown", "test_40_search", "test_50_syntax", "test_60_theme", "test_70_editor"],
+    "unit": ["test_30_markdown", "test_40_search", "test_50_syntax", "test_60_theme", "test_65_lang", "test_70_editor"],
     "app": ["test_20_cli", "test_80_window"],
     "build": ["test_10_build"],
     "release": ["test_90_release"],

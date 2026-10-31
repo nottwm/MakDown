@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: MIT
 """The real compiled binary: command line flags and a headless start-up smoke test (QT_QPA_PLATFORM=offscreen)."""
+import json
 import os
 import re
 import shutil
@@ -107,6 +108,41 @@ class TestStartup(unittest.TestCase):
             self.assertEqual(len(list((data / "syntax").glob("*.json"))), 11)
         finally:
             shutil.rmtree(home, ignore_errors=True)
+
+    def test_first_run_creates_language_files(self):
+        home = tempfile.mkdtemp()
+        try:
+            alive, rc, out, err, _ = self.run_for([], home=home)
+            self.assertTrue(alive)
+            langs = Path(home) / ".local/share/MakDown/lang"
+            self.assertEqual(sorted(p.name for p in langs.glob("*.json")), ["en.json", "pl.json", "ru.json"])
+        finally:
+            shutil.rmtree(home, ignore_errors=True)
+
+    def test_survives_corrupt_language_files(self):
+        home = tempfile.mkdtemp()
+        try:
+            data = Path(home) / ".local/share/MakDown"
+            (data / "lang").mkdir(parents=True)
+            (data / "lang" / "junk.json").write_text("nope")
+            (data / "lang" / "ru.json").write_text("][")
+            (data / "settings.jsonc").write_text('{"language": "ru"}')
+            alive, rc, out, err, _ = self.run_for([], home=home)
+            self.assertHealthy(alive, rc, err, "corrupt language files")
+        finally:
+            shutil.rmtree(home, ignore_errors=True)
+
+    def test_every_stock_language_starts_cleanly(self):
+        for code in ("en", "ru", "pl"):
+            home = tempfile.mkdtemp()
+            try:
+                data = Path(home) / ".local/share/MakDown"
+                data.mkdir(parents=True)
+                (data / "settings.jsonc").write_text(json.dumps({"language": code}))
+                alive, rc, out, err, _ = self.run_for([], home=home, seconds=2.0)
+                self.assertHealthy(alive, rc, err, f"language {code}")
+            finally:
+                shutil.rmtree(home, ignore_errors=True)
 
     def test_opens_a_markdown_file(self):
         alive, rc, out, err, _ = self.run_for([str(FIXTURES / "kitchen-sink.md")])

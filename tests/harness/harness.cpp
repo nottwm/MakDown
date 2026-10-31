@@ -26,6 +26,9 @@
 #include <QTextDocument>
 #include <QTextLayout>
 #include <QLabel>
+#include <QMenu>
+#include <QMenuBar>
+#include <QStatusBar>
 #include <QDialog>
 #include <QSet>
 #include <QImage>
@@ -36,6 +39,7 @@
 
 #include <makdown/core/anim.h>
 #include <makdown/core/buildinfo.h>
+#include <makdown/core/lang.h>
 #include <makdown/core/markdown.h>
 #include <makdown/core/search.h>
 #include <makdown/core/syntax.h>
@@ -43,6 +47,9 @@
 #include <makdown/ui/editor.h>
 #include <makdown/ui/findbar.h>
 #include <makdown/ui/mainwindow.h>
+#include <makdown/ui/settingsdialog.h>
+#include <QListWidget>
+#include <QStackedWidget>
 #include <makdown/ui/synhl.h>
 
 static QStringList g_warnings;
@@ -261,12 +268,12 @@ static QJsonObject handle(const QJsonObject& q) {
         r["qss"] = qss;
     } else if (cmd == "settings_load") {
         AppSettings s; s.load();
-        QJsonObject j; j["theme"] = s.theme; j["vim"] = s.vim; j["lineNumbers"] = s.lineNumbers; j["tabWidth"] = s.tabWidth; j["viewMode"] = s.viewMode;
+        QJsonObject j; j["theme"] = s.theme; j["language"] = s.language; j["vim"] = s.vim; j["lineNumbers"] = s.lineNumbers; j["tabWidth"] = s.tabWidth; j["viewMode"] = s.viewMode;
         j["animations"] = s.animations; j["wrap"] = s.wrap; j["explorer"] = s.explorer; j["folder"] = s.folder; j["customFrame"] = s.customFrame;
         j["liveReload"] = s.liveReload; j["console"] = s.console; j["lastFile"] = s.lastFile; r["settings"] = j;
     } else if (cmd == "settings_save") {
         AppSettings s; const QJsonObject o = q["settings"].toObject();
-        s.theme = o["theme"].toString("GitHub"); s.vim = o["vim"].toBool(); s.tabWidth = o["tabWidth"].toInt(4); s.viewMode = o["viewMode"].toInt(1);
+        s.theme = o["theme"].toString("GitHub"); s.language = o["language"].toString("auto"); s.vim = o["vim"].toBool(); s.tabWidth = o["tabWidth"].toInt(4); s.viewMode = o["viewMode"].toInt(1);
         s.animations = o["animations"].toInt(2); s.wrap = o["wrap"].toBool(true); s.folder = o["folder"].toString(); s.lastFile = o["lastFile"].toString();
         s.lineNumbers = o["lineNumbers"].toBool(true); s.console = o["console"].toBool(); s.save();
     } else if (cmd == "anim") {
@@ -325,6 +332,48 @@ static QJsonObject handle(const QJsonObject& q) {
         QStringList labels; for (QLabel* l : fb.findChildren<QLabel*>()) labels << l->text(); r["labels"] = arr(labels);
         r["editCount"] = edits.size();
 
+    // ------------------------------------------------------------------ languages
+    } else if (cmd == "lang_stock") {
+        extern const char* const kStockLangFiles[]; extern const char* const kStockLangJson[];
+        QJsonArray a; for (int i = 0; kStockLangFiles[i]; ++i) { QJsonObject j; j["file"] = kStockLangFiles[i]; j["json"] = kStockLangJson[i]; a << j; }
+        r["files"] = a;
+    } else if (cmd == "lang_ensure") {
+        Lang::ensureStock(); r["dir"] = Lang::langDir();
+    } else if (cmd == "lang_available") {
+        QJsonArray a; for (const Lang::Info& i : Lang::available()) { QJsonObject j; j["code"] = i.code; j["name"] = i.name; j["builtin"] = i.builtin; j["revision"] = i.revision; a << j; }
+        r["languages"] = a;
+    } else if (cmd == "lang_resolve") {
+        r["code"] = Lang::resolve(q["setting"].toString("auto"));
+    } else if (cmd == "lang_load") {
+        r["loaded"] = Lang::load(q["code"].toString()); r["current"] = Lang::current();
+    } else if (cmd == "lang_text") {
+        const QString key = q["key"].toString();
+        r["text"] = q.contains("n") ? Lang::plural(key, q["n"].toInt()) : Lang::text(key);
+    } else if (cmd == "lang_plural_index") {
+        r["index"] = Lang::pluralIndex(q["rule"].toString(), q["n"].toInt());
+    } else if (cmd == "lang_parse") {
+        Lang::Info i; QString err; r["valid"] = Lang::parseInfo(q["json"].toString().toUtf8(), &i, &err); r["error"] = err; r["name"] = i.name;
+    } else if (cmd == "settings_grab") {              // the real Settings dialog on page `page`; texts of its labels / buttons / nav list
+        AppSettings s; s.load(); QList<Theme> themes = ThemeStore::loadAll();
+        SettingsDialog dlg(s, themes); dlg.show();
+        QListWidget* nav = dlg.findChild<QListWidget*>("nav");
+        if (nav && q.contains("page")) nav->setCurrentRow(q["page"].toInt());
+        QElapsedTimer t; t.start(); while (t.elapsed() < 250) QCoreApplication::processEvents();
+        QStringList items; if (nav) for (int i = 0; i < nav->count(); ++i) items << nav->item(i)->text();
+        QStringList labels; for (QLabel* l : dlg.findChildren<QLabel*>()) if (l->isVisibleTo(&dlg) && !l->text().isEmpty()) labels << l->text();
+        r["nav"] = arr(items); r["labels"] = arr(labels); r["title"] = dlg.windowTitle();
+        if (q.contains("save")) dlg.grab().save(q["save"].toString());
+    } else if (cmd == "win_strings") {                // every menu title / menu item / label / status text of the open window
+        if (!g_win) { r["ok"] = false; r["error"] = "no window"; }
+        else {
+            QStringList menus, items, labels;
+            for (QMenuBar* mb : g_win->findChildren<QMenuBar*>()) {
+                for (QAction* a : mb->actions()) { menus << a->text(); if (a->menu()) for (QAction* x : a->menu()->actions()) if (!x->isSeparator()) items << x->text(); }
+            }
+            for (QLabel* l : g_win->findChildren<QLabel*>()) if (!l->text().isEmpty()) labels << l->text();
+            r["menus"] = arr(menus); r["items"] = arr(items); r["labels"] = arr(labels);
+            r["status"] = g_win->statusBar()->currentMessage();
+        }
     // ------------------------------------------------------------------ main window (whole app, offscreen)
     } else if (cmd == "win_open") {
         delete g_win; g_win = new MainWindow(q["file"].toString(), q["nativeFrame"].toBool());

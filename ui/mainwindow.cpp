@@ -5,6 +5,7 @@
 #include <makdown/core/lang.h>
 #include <makdown/ui/settingsdialog.h>
 #include <makdown/ui/explorer.h>
+#include <makdown/ui/aipanel.h>
 #include <makdown/ui/browsertab.h>
 #include <makdown/ui/console.h>
 #include <makdown/ui/findbar.h>
@@ -230,6 +231,32 @@ void MainWindow::buildUi() {
         if (QFileInfo(path).absoluteFilePath() == file_) editor_->setFocus();
     });
     connect(sidebar_->git(), &GitTab::openFolderRequested, this, [this](const QString& d) { openFolder(d); });
+    {   // what the AI assistant may do inside the app (core/ai.h describes the tools; ui/aipanel.cpp runs them)
+        AiHost host;
+        host.workDir = [this] { return explorer_ ? explorer_->root() : QString(); };
+        host.currentFile = [this] { return file_; };
+        host.editorText = [this] { return editor_->toPlainText(); };
+        host.selection = [this] {
+            const QTextCursor c = editor_->textCursor();
+            return c.hasSelection() ? c.selectedText().replace(QChar::ParagraphSeparator, QChar('\n')) : QString();
+        };
+        host.applyToOpenFile = [this](const QString& path, const QString& text) {
+            if (file_.isEmpty() || QFileInfo(file_).absoluteFilePath() != QFileInfo(path).absoluteFilePath()) return false;
+            QTextCursor cur(editor_->document());
+            cur.beginEditBlock(); cur.select(QTextCursor::Document); cur.insertText(text); cur.endEditBlock();     // one undo step
+            return saveFile();
+        };
+        host.openFile = [this](const QString& path) { openAnyFile(path); };
+        host.newDocument = [this](const QString& text) {
+            if (!maybeSave()) return;
+            applyHighlighting(QString());
+            editor_->setPlainText(text); editor_->document()->setModified(true);
+            file_.clear(); s_.lastFile.clear();
+            buildChrome(); updatePaneHeaders(); updateTitle(); renderPreview();
+        };
+        sidebar_->ai()->setHost(host);
+        connect(sidebar_->ai(), &AiPanel::settingsRequested, this, [this] { openSettings(true); });
+    }
     connect(explorer_, &FileExplorer::fileActivated, this, [this](const QString& p) { openAnyFile(p); });
     connect(explorer_, &FileExplorer::previewRequested, this, [this](const QString& p) { openMedia(p); });
     connect(explorer_, &FileExplorer::browserRequested, this, [this](const QString& p) { openInBrowser(p); });
@@ -385,6 +412,12 @@ void MainWindow::buildMenus() {
 
     QMenu* git = titleBar_->menuBar()->addMenu(L("menu.git"));
     add(git, L("git.cloneMenu"), QKeySequence("Ctrl+Shift+G"), [this] { openGitTab(); });
+
+    aiMenu_ = titleBar_->menuBar()->addMenu(L("menu.ai"));
+    aiActions_ << add(aiMenu_, L("ai.menu.open"), QKeySequence("Ctrl+Shift+A"), [this] { openAiPanel(); });
+    aiActions_ << add(aiMenu_, L("ai.menu.new"), QKeySequence(), [this] { openAiPanel(); sidebar_->ai()->newChat(); });
+    aiMenu_->addSeparator();
+    aiActions_ << add(aiMenu_, L("ai.menu.settings"), QKeySequence(), [this] { openSettings(true); });
 
     QMenu* set = titleBar_->menuBar()->addMenu(L("menu.settings"));
     add(set, L("settings.prefs"), QKeySequence("Ctrl+,"), [this] { openSettings(); });
@@ -546,6 +579,7 @@ void MainWindow::applyAll() {
     themeLabel_->setText(theme_.name + "  ");
     explorer_->setAnimated(Anim::on());
     sidebar_->applyTheme(theme_);           // folders expand / collapse smoothly
+    applyAiState();
     showExplorer(s_.explorer);
     console_->applyTheme(theme_);
     showConsole(s_.console);
@@ -855,8 +889,22 @@ void MainWindow::dropEvent(QDropEvent* e) {
 // ---------------------------------------------------------------------------------------------
 // dialogs + vim-style command line
 // ---------------------------------------------------------------------------------------------
-void MainWindow::openSettings() {
+void MainWindow::applyAiState() {
+    sidebar_->setAiEnabled(s_.ai);
+    if (aiMenu_) aiMenu_->menuAction()->setVisible(s_.ai);
+    for (QAction* a : aiActions_) a->setEnabled(s_.ai);       // a hidden menu still owns its shortcuts
+    sidebar_->ai()->refresh();
+}
+
+void MainWindow::openAiPanel() {
+    if (!s_.ai) return;
+    revealSidebar();
+    sidebar_->showPage(Sidebar::Ai);
+}
+
+void MainWindow::openSettings(bool aiPage) {
     SettingsDialog dlg(s_, themes_, this);
+    if (aiPage) dlg.showAiPage();
     connect(&dlg, &SettingsDialog::applied, this, [this] { applyAll(); s_.save(); });   // live preview of every change
     settingsOpen_ = true;
     dlg.exec();

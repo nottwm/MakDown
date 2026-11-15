@@ -553,6 +553,7 @@ void AppSettings::load() {
     animations = qBound(0, o["animations"].toInt(animations), 3);
     console = o["console"].toBool(console);
     customFrame = o["customFrame"].toBool(customFrame);
+    ai = o["ai"].toBool(ai);
 }
 
 void AppSettings::save() const {
@@ -562,7 +563,7 @@ void AppSettings::save() const {
     o["revealMarkers"] = revealMarkers; o["livePreview"] = livePreview; o["syncScroll"] = syncScroll;
     o["tabWidth"] = tabWidth; o["viewMode"] = viewMode; o["geometry"] = geometry; o["lastFile"] = lastFile;
     o["explorer"] = explorer; o["liveReload"] = liveReload; o["folder"] = folder;
-    o["animations"] = animations; o["console"] = console; o["customFrame"] = customFrame;
+    o["animations"] = animations; o["console"] = console; o["customFrame"] = customFrame; o["ai"] = ai;
     QDir().mkpath(ThemeStore::appHome());
     writeFile(ThemeStore::appHome() + "/settings.jsonc",
               "// MakDown settings (JSONC). Changed from the Settings dialog; safe to edit by hand while MakDown is closed.\n" +

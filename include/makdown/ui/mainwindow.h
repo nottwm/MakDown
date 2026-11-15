@@ -16,7 +16,7 @@ class Sidebar;
 class TitleBar;
 class FrameBorder;
 class QVariantAnimation;
-class QLabel; class QLineEdit; class QSplitter; class QFrame; class QAction; class QActionGroup; class QWidget; class QTabWidget;
+class QMenu; class QLabel; class QLineEdit; class QSplitter; class QFrame; class QAction; class QActionGroup; class QWidget; class QTabWidget;
 
 // Preview pane: a QTextBrowser that keeps the document centred at the theme's page width.
 class PreviewBrowser : public QTextBrowser {
@@ -94,7 +94,9 @@ private:
     void updateFrameState();                     // border visibility / colours, maximise glyph
     bool isCaptionAt(const QPoint& p) const;     // p in window coordinates: is it the draggable title area?
     // ---- misc
-    void openSettings();
+    void openSettings(bool aiPage = false);
+    void openAiPanel();                          // show the side bar on the AI page (Ctrl+Shift+A)
+    void applyAiState();                         // Settings > Preferences > AI > "No AI": show / hide every AI control
     void showAbout();
     void showCommandLine(const QString& prefix);
     void runCommand(const QString& text);       // vim-style ":w", ":q", ":set vim", "/search" ...
@@ -134,6 +136,8 @@ private:
     QVariantAnimation *explorerAnim_ = nullptr, *consoleAnim_ = nullptr;
     QString appliedTheme_;
     TitleBar* titleBar_ = nullptr;               // menu bar + (custom frame) icon and caption buttons
+    QMenu* aiMenu_ = nullptr;                    // the AI menu and its actions: hidden / disabled with "No AI"
+    QList<QAction*> aiActions_;
     FrameBorder* frameBorder_ = nullptr;         // themed window border painted over everything
     bool frameCustom_ = false;                   // the custom frame is active right now
     bool forceNativeFrame_ = false;              // --native-frame

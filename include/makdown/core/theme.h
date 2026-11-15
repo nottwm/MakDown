@@ -83,6 +83,7 @@ struct AppSettings {
     QString folder;                // explorer root
     int  animations = 2;           // 0 none, 1 little, 2 normal, 3 full (core/anim.h)
     bool console = false;          // the console panel under the editor is shown
+    bool ai = true;                // AI assistant on; false = "No AI" (Settings > Preferences > AI): every AI control disappears
     bool customFrame = true;       // MakDown draws its own title bar + themed window border (Windows only; see ui/titlebar.h)
     void load();
     void save() const;

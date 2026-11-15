@@ -5,10 +5,12 @@
 #include <makdown/arch/platform.h>
 
 #include <QCheckBox>
+#include <QDialog>
 #include <QColorDialog>
 #include <QButtonGroup>
 #include <QComboBox>
 #include <QRadioButton>
+#include <makdown/core/ai.h>
 #include <makdown/core/anim.h>
 #include <makdown/ui/fx.h>
 #include <QDesktopServices>
@@ -20,7 +22,9 @@
 #include <QHBoxLayout>
 #include <QInputDialog>
 #include <QLabel>
+#include <QLineEdit>
 #include <QListWidget>
+#include <QPlainTextEdit>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QScrollArea>
@@ -48,13 +52,14 @@ SettingsDialog::SettingsDialog(AppSettings& s, QList<Theme>& themes, QWidget* pa
     auto* body = new QHBoxLayout; body->setSpacing(0);
 
     nav_ = new QListWidget; nav_->setObjectName("nav"); nav_->setFixedWidth(210);
-    nav_->addItems({L("nav.appearance"), L("nav.editor"), L("nav.preview"), L("nav.animations"), L("nav.language"), L("nav.about")});
+    nav_->addItems({L("nav.appearance"), L("nav.editor"), L("nav.preview"), L("nav.animations"), L("nav.language"), L("nav.ai"), L("nav.about")});
     pages_ = new QStackedWidget;
     pages_->addWidget(scrollPage(buildAppearancePage()));
     pages_->addWidget(scrollPage(buildEditorPage()));
     pages_->addWidget(scrollPage(buildPreviewPage()));
     pages_->addWidget(scrollPage(buildAnimationsPage()));
     pages_->addWidget(scrollPage(buildLanguagePage()));
+    pages_->addWidget(scrollPage(buildAiPage()));
     pages_->addWidget(scrollPage(buildAboutPage()));
     connect(nav_, &QListWidget::currentRowChanged, this, [this](int i) {
         pages_->setCurrentIndex(i);
@@ -78,6 +83,10 @@ SettingsDialog::SettingsDialog(AppSettings& s, QList<Theme>& themes, QWidget* pa
     rebuildThemeCombo();
     loadThemeIntoControls();
 }
+
+namespace { constexpr int kAiRow = 5; }                // position of "AI" in the navigation list (before About)
+
+void SettingsDialog::showAiPage() { nav_->setCurrentRow(kAiRow); }
 
 // ---------------------------------------------------------------------------------------------
 // generic helper: a checkbox bound to a bool in AppSettings
@@ -394,4 +403,125 @@ void SettingsDialog::deleteCurrent() {
     themes_ = ThemeStore::loadAll();
     s_.theme = "GitHub";
     rebuildThemeCombo(); loadThemeIntoControls(); emit applied();
+}
+
+// ---------------------------------------------------------------------------------------------
+// AI page: "No AI" switch, provider, API key, model, custom prompt (see core/ai.h)
+// ---------------------------------------------------------------------------------------------
+QWidget* SettingsDialog::buildAiPage() {
+    auto* page = new QWidget; auto* v = new QVBoxLayout(page); v->setContentsMargins(28, 22, 28, 22); v->setSpacing(10);
+    v->addWidget(title(L("nav.ai")));
+
+    noAi_ = new QCheckBox(L("ai.set.noAi")); noAi_->setChecked(!s_.ai);
+    v->addWidget(noAi_);
+    auto* noHint = new QLabel(L("ai.set.noAiHint")); noHint->setObjectName("hint"); noHint->setWordWrap(true);
+    v->addWidget(noHint);
+
+    aiBox_ = new QGroupBox(L("ai.set.group"));
+    auto* bv = new QVBoxLayout(aiBox_); bv->setSpacing(10);
+    auto* form = new QFormLayout; form->setHorizontalSpacing(14); form->setVerticalSpacing(8);
+
+    aiProvider_ = new QComboBox;
+    for (const Ai::Provider& p : Ai::providers()) aiProvider_->addItem(p.name, p.id);
+    form->addRow(L("ai.set.provider"), aiProvider_);
+
+    aiBase_ = new QLineEdit; aiBase_->setClearButtonEnabled(true);
+    form->addRow(L("ai.set.baseUrl"), aiBase_);
+
+    auto* keyRow = new QHBoxLayout;
+    aiKey_ = new QLineEdit; aiKey_->setEchoMode(QLineEdit::Password); aiKey_->setClearButtonEnabled(true);
+    aiKey_->setPlaceholderText("sk-...");
+    auto* show = new QPushButton(L("ai.set.show")); show->setCheckable(true);
+    connect(show, &QPushButton::toggled, this, [this, show](bool on) { aiKey_->setEchoMode(on ? QLineEdit::Normal : QLineEdit::Password); show->setText(on ? L("ai.set.hide") : L("ai.set.show")); });
+    keyRow->addWidget(aiKey_, 1); keyRow->addWidget(show);
+    form->addRow(L("ai.set.apiKey"), keyRow);
+    bv->addLayout(form);
+    aiKeyHint_ = new QLabel; aiKeyHint_->setObjectName("hint"); aiKeyHint_->setWordWrap(true);
+    bv->addWidget(aiKeyHint_);
+
+    auto* form2 = new QFormLayout; form2->setHorizontalSpacing(14); form2->setVerticalSpacing(8);
+    aiModel_ = new QComboBox; aiModel_->setEditable(true); aiModel_->setInsertPolicy(QComboBox::NoInsert); aiModel_->setMinimumWidth(320);
+    form2->addRow(L("ai.set.model"), aiModel_);
+    bv->addLayout(form2);
+
+    auto* pl = new QLabel(L("ai.set.prompt")); bv->addWidget(pl);
+    aiPrompt_ = new QPlainTextEdit; aiPrompt_->setMinimumHeight(150); aiPrompt_->setPlaceholderText(L("ai.set.promptPlaceholder"));
+    bv->addWidget(aiPrompt_);
+    auto* ph = new QLabel(L("ai.set.promptHint")); ph->setObjectName("hint"); ph->setWordWrap(true); bv->addWidget(ph);
+    auto* viewBase = new QPushButton(L("ai.set.viewBase"));
+    bv->addWidget(viewBase, 0, Qt::AlignLeft);
+
+    Ai::Config& cfg = Ai::config();
+    addCheck(bv, L("ai.set.confirmFiles"), QString(), &cfg.confirmFiles);
+    addCheck(bv, L("ai.set.confirmCmd"), L("ai.set.confirmCmdHint"), &cfg.confirmCommands);
+    for (QCheckBox* cb : aiBox_->findChildren<QCheckBox*>()) connect(cb, &QCheckBox::toggled, this, [] { Ai::saveConfig(); });
+    auto* steps = new QSpinBox; steps->setRange(1, 100); steps->setValue(cfg.maxSteps);
+    auto* sf = new QFormLayout; sf->addRow(L("ai.set.maxSteps"), steps); bv->addLayout(sf);
+    connect(steps, QOverload<int>::of(&QSpinBox::valueChanged), this, [](int n) { Ai::config().maxSteps = n; Ai::saveConfig(); });
+    v->addWidget(aiBox_);
+    v->addStretch(1);
+
+    // ---- behaviour
+    aiBox_->setEnabled(s_.ai);
+    connect(noAi_, &QCheckBox::toggled, this, [this](bool on) { s_.ai = !on; aiBox_->setEnabled(!on); emit applied(); });
+
+    const int idx = aiProvider_->findData(cfg.provider);
+    aiProvider_->setCurrentIndex(idx < 0 ? 0 : idx);
+    loadAiProvider();
+    connect(aiProvider_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int i) {
+        if (loading_ || i < 0) return;
+        Ai::config().provider = aiProvider_->itemData(i).toString();
+        Ai::saveConfig(); loadAiProvider(); emit applied();
+    });
+    connect(aiBase_, &QLineEdit::textEdited, this, [this](const QString& t) {
+        if (loading_) return;
+        Ai::Config& c = Ai::config();
+        const Ai::Provider* p = Ai::findProvider(c.provider);
+        QString u = t.trimmed();
+        if (p && u == p->baseUrl) u.clear();                   // the default needs no override
+        c.cur().baseUrl = u; Ai::saveConfig(); emit applied();
+    });
+    connect(aiKey_, &QLineEdit::textEdited, this, [this](const QString& t) {
+        if (loading_) return;
+        Ai::config().cur().apiKey = t.trimmed(); Ai::saveConfig(); emit applied();
+    });
+    connect(aiModel_, &QComboBox::editTextChanged, this, [this](const QString& t) {
+        if (loading_) return;
+        Ai::Config& c = Ai::config();
+        const Ai::Provider* p = Ai::findProvider(c.provider);
+        QString m = t.trimmed();
+        if (p && m == p->defaultModel) m.clear();
+        c.cur().model = m; Ai::saveConfig(); emit applied();
+    });
+    connect(aiPrompt_, &QPlainTextEdit::textChanged, this, [this] {
+        if (loading_) return;
+        Ai::config().customPrompt = aiPrompt_->toPlainText(); Ai::saveConfig();
+    });
+    connect(viewBase, &QPushButton::clicked, this, [this] {
+        QDialog d(this); d.setWindowTitle(L("ai.set.baseTitle")); d.resize(720, 560);
+        auto* dv = new QVBoxLayout(&d);
+        auto* te = new QPlainTextEdit(Ai::basePrompt()); te->setReadOnly(true); dv->addWidget(te);
+        auto* ok = new QPushButton(L("settings.done")); connect(ok, &QPushButton::clicked, &d, &QDialog::accept);
+        dv->addWidget(ok, 0, Qt::AlignRight);
+        d.exec();
+    });
+    return page;
+}
+
+void SettingsDialog::loadAiProvider() {
+    const bool was = loading_; loading_ = true;
+    const Ai::Config& c = Ai::config();
+    const Ai::Provider* p = Ai::findProvider(c.provider);
+    const Ai::ProviderSettings s = c.per.value(c.provider);
+    aiBase_->setText(s.baseUrl);
+    aiBase_->setPlaceholderText(p ? p->baseUrl : QString());
+    aiKey_->setText(s.apiKey);
+    QString env = p ? p->keyEnv : QString();
+    aiKeyHint_->setText(L("ai.set.keyHint").arg(env));
+    aiModel_->clear();
+    if (p) aiModel_->addItems(p->models);
+    aiModel_->setEditText(c.model(c.provider));
+    aiModel_->lineEdit()->setPlaceholderText(p && p->custom ? L("ai.set.modelCustom") : QString());
+    if (aiPrompt_->toPlainText() != c.customPrompt) aiPrompt_->setPlainText(c.customPrompt);
+    loading_ = was;
 }

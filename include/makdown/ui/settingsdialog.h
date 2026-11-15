@@ -6,13 +6,14 @@
 #include <makdown/core/theme.h>
 
 class QListWidget; class QStackedWidget; class QComboBox; class QPushButton; class QFontComboBox; class QSpinBox;
-class QSlider; class QCheckBox; class QGroupBox; class QLabel; class QVBoxLayout; class QFrame; class QWidget;
+class QPlainTextEdit; class QLineEdit; class QSlider; class QCheckBox; class QGroupBox; class QLabel; class QVBoxLayout; class QFrame; class QWidget;
 
 class SettingsDialog : public QDialog {
     Q_OBJECT
 public:
     // Both objects are owned by MainWindow; the dialog edits them in place and emits applied().
     SettingsDialog(AppSettings& settings, QList<Theme>& themes, QWidget* parent = nullptr);
+    void showAiPage();                                  // jump to Preferences > AI
 
 signals:
     void applied();      // something changed -> MainWindow re-applies theme/settings live
@@ -23,7 +24,9 @@ private:
     QWidget* buildPreviewPage();
     QWidget* buildAnimationsPage();
     QWidget* buildLanguagePage();
+    QWidget* buildAiPage();
     QWidget* buildAboutPage();
+    void loadAiProvider();                             // provider settings -> widgets (without triggering edits)
     QCheckBox* addCheck(QVBoxLayout* l, const QString& text, const QString& hint, bool* target);
 
     Theme* current();                                  // the theme currently selected in the combo
@@ -53,4 +56,11 @@ private:
     QSlider* radius_ = nullptr; QLabel* radiusVal_ = nullptr;
     QCheckBox *codeBorder_ = nullptr, *codeLabel_ = nullptr, *headRules_ = nullptr;
     QMap<QString, QPushButton*> colorBtns_;
+    // AI page
+    QCheckBox* noAi_ = nullptr;
+    QGroupBox* aiBox_ = nullptr;
+    QComboBox *aiProvider_ = nullptr, *aiModel_ = nullptr;
+    QLineEdit *aiBase_ = nullptr, *aiKey_ = nullptr;
+    QLabel* aiKeyHint_ = nullptr;
+    QPlainTextEdit* aiPrompt_ = nullptr;
 };

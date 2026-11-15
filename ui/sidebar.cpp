@@ -1,6 +1,7 @@
 // sidebar.cpp - see include/makdown/ui/sidebar.h
 #include <makdown/ui/sidebar.h>
 #include <makdown/core/lang.h>
+#include <makdown/ui/aipanel.h>
 #include <makdown/ui/explorer.h>
 #include <makdown/ui/gittab.h>
 #include <makdown/ui/quickopen.h>
@@ -16,7 +17,7 @@
 #include <QVBoxLayout>
 
 namespace {
-// 22x22 line icons drawn in the theme colours (folder, magnifier, git branch)
+// 22x22 line icons drawn in the theme colours (folder, magnifier, git branch, sparkle)
 QIcon railIcon(int kind, const QColor& off, const QColor& on) {
     QIcon ic;
     for (int state = 0; state < 2; ++state) {
@@ -30,6 +31,13 @@ QIcon railIcon(int kind, const QColor& off, const QColor& on) {
         } else if (kind == 1) {                            // magnifier
             p.drawEllipse(QPointF(9.5, 9.5), 5.5, 5.5);
             p.drawLine(QPointF(13.6, 13.6), QPointF(18.5, 18.5));
+        } else if (kind == 3) {                            // sparkle: a big four-point star and a small one
+            auto star = [&p](double cx, double cy, double r) {
+                QPainterPath s;
+                s.moveTo(cx, cy - r); s.quadTo(cx, cy, cx + r, cy); s.quadTo(cx, cy, cx, cy + r); s.quadTo(cx, cy, cx - r, cy); s.quadTo(cx, cy, cx, cy - r);
+                p.drawPath(s);
+            };
+            star(9.5, 12.5, 7); star(17, 5, 3.2);
         } else {                                           // branch
             p.drawEllipse(QPointF(7, 4.8), 2.2, 2.2); p.drawEllipse(QPointF(7, 17.2), 2.2, 2.2); p.drawEllipse(QPointF(15.5, 8.6), 2.2, 2.2);
             p.drawLine(QPointF(7, 7), QPointF(7, 15));
@@ -50,8 +58,8 @@ Sidebar::Sidebar(std::function<QString()> rootProvider, QWidget* parent) : QWidg
     auto* rail = new QFrame; rail->setObjectName("sideRail"); rail->setFixedWidth(40);
     auto* rv = new QVBoxLayout(rail); rv->setContentsMargins(0, 6, 0, 6); rv->setSpacing(2);
     railGroup_ = new QButtonGroup(this); railGroup_->setExclusive(true);
-    const QString tips[3] = {L("side.explorer"), L("side.search"), L("side.git")};
-    for (int i = 0; i < 3; ++i) {
+    const QString tips[4] = {L("side.explorer"), L("side.search"), L("side.git"), L("side.ai")};
+    for (int i = 0; i < 4; ++i) {
         auto* b = new QToolButton; b->setCheckable(true); b->setToolTip(tips[i]); b->setAutoRaise(true);
         b->setIconSize(QSize(22, 22)); b->setFocusPolicy(Qt::NoFocus); b->setToolButtonStyle(Qt::ToolButtonIconOnly);
         railGroup_->addButton(b, i); rv->addWidget(b); rail_[i] = b;
@@ -84,6 +92,8 @@ Sidebar::Sidebar(std::function<QString()> rootProvider, QWidget* parent) : QWidg
 
     git_ = new GitTab;
     pages_->addWidget(git_);
+    ai_ = new AiPanel;
+    pages_->addWidget(ai_);
     h->addWidget(pages_, 1);
 
     connect(railGroup_, &QButtonGroup::idClicked, this, [this](int id) { showPage(Page(id)); });
@@ -93,7 +103,13 @@ Sidebar::Sidebar(std::function<QString()> rootProvider, QWidget* parent) : QWidg
 
 void Sidebar::applyTheme(const Theme& t) {
     const QColor off(t.color("muted")), on(t.color("fg"));
-    for (int i = 0; i < 3; ++i) rail_[i]->setIcon(railIcon(i, off, on));
+    for (int i = 0; i < 4; ++i) rail_[i]->setIcon(railIcon(i, off, on));
+    ai_->applyTheme(t);
+}
+
+void Sidebar::setAiEnabled(bool on) {
+    rail_[Ai]->setVisible(on);
+    if (!on && pageIdx_ == Ai) showPage(Files);
 }
 
 void Sidebar::indexFiles() {
@@ -119,6 +135,7 @@ void Sidebar::focusPage() {
         case Files:  explorer_->setFocus(); break;
         case Search: if (fileMode_) quick_->focusInput(); else search_->focusQuery(QString()); break;
         case Git:    git_->focusUrl(); break;
+        case Ai:     ai_->focusInput(); break;
     }
 }
 

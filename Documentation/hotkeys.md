@@ -18,6 +18,7 @@
 | Ctrl+P | go to file (side bar > Search > File names): fuzzy search of every file in the working folder (`name:42` jumps to a line) |
 | Ctrl+Shift+F | find in files: search a string in all files of the working folder (side bar > Search > Text) |
 | Ctrl+Shift+G | Git tab: clone a repository (http(s) / ssh) into a path you choose |
+| Ctrl+Shift+A | AI assistant tab (hidden with Settings > Preferences > AI > No AI) |
 | Ctrl+T | new browser tab (focus the address bar) |
 | Ctrl+` | show / hide the console (the focus jumps into it; Esc-free: press Ctrl+` again) |
 | F2 / Del | rename / delete the selected entry (while the explorer has focus; also in its right-click menu) |

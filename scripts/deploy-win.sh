@@ -42,6 +42,16 @@ if [ -n "$PLUGIN" ]; then
         fi
     done
 fi
+# TLS backend: the AI assistant talks https; Qt loads tls/qschannelbackend.dll (Windows' own SChannel) at run time
+if [ -n "$PLUGIN" ]; then
+    PDIR=$(dirname "$(dirname "$PLUGIN")")
+    for tls in qschannelbackend qopensslbackend; do
+        if [ -f "$PDIR/tls/$tls.dll" ]; then
+            mkdir -p "$DEST/tls"; cp -u "$PDIR/tls/$tls.dll" "$DEST/tls/"
+            echo "plugin  : tls/$tls.dll"; echo "$DEST/tls/$tls.dll" >> "$QUEUE"
+        fi
+    done
+fi
 n=1
 while [ "$n" -le "$(wc -l < "$QUEUE")" ]; do
     cur=$(sed -n "${n}p" "$QUEUE"); n=$((n+1))

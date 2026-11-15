@@ -10,6 +10,7 @@
     │   ├── markdown.cpp       markdown -> rich-text renderer
     │   ├── syntax.cpp         syntax packs: load / match (<home>/syntax/*.json)
     │   ├── syntaxstock.cpp    the stock packs (c, cpp, makefile, ld, rust, bash, batch, html, python, css, js) as JSON strings
+    │   ├── ai.cpp             AI assistant core: providers, request / reply formats, system prompt, <makdown_tool> parser, sandboxed file helpers (no widgets)
     │   ├── lang.cpp           interface languages: <home>/lang/*.json, L("key") lookup with English fallback, plural rules
     │   ├── langstock.cpp      GENERATED from lang/*.json by scripts/gen-lang.py (the stock languages en, ru, pl)
     │   ├── search.cpp         search helpers: regex builder, file walker, per-file search, fuzzy score, globs

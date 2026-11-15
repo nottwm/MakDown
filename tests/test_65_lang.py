@@ -296,7 +296,7 @@ class TestWindowLanguages(unittest.TestCase):
     def test_russian(self):
         r = self.window("ru")
         s = load("ru")["strings"]
-        self.assertEqual(r["menus"], [s[k] for k in ("menu.file", "menu.edit", "menu.search", "menu.view", "menu.browser", "menu.git", "menu.settings", "menu.help")])
+        self.assertEqual(r["menus"], [s[k] for k in ("menu.file", "menu.edit", "menu.search", "menu.view", "menu.browser", "menu.git", "menu.ai", "menu.settings", "menu.help")])
         self.assertTrue(r["text"].startswith("# Добро пожаловать в MakDown"))
         self.assertIn(s["file.save"], r["items"])
         self.assertTrue(any("слов" in l for l in r["labels"]), r["labels"])
@@ -320,7 +320,7 @@ class TestWindowLanguages(unittest.TestCase):
                 for page in range(6):
                     r = h.call("settings_grab", page=page)
                     self.assertEqual(r["title"], s["settings.title"], code)
-                    self.assertEqual(r["nav"], [s[k] for k in ("nav.appearance", "nav.editor", "nav.preview", "nav.animations", "nav.language", "nav.about")])
+                    self.assertEqual(r["nav"], [s[k] for k in ("nav.appearance", "nav.editor", "nav.preview", "nav.animations", "nav.language", "nav.ai", "nav.about")])
                 lang_page = h.call("settings_grab", page=4)
                 self.assertIn(s["lang.label"], lang_page["labels"], code)
                 self.assertTrue(h.stderr.count("Qt") == 0 or "QObject" not in h.stderr, h.stderr[-500:])

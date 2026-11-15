@@ -78,6 +78,9 @@ Optional built-in vim engine (`Ctrl+Alt+V`):
 ### Syntax highlighting for source files
 Editable JSON packs for **C, C++, Makefile, linker scripts, Rust, Bash, Batch, HTML/XML, Python, CSS, JavaScript/TypeScript**. Add your own language by dropping a `.json` file in a folder.
 
+### AI assistant (optional)
+A chat page in the side bar (`Ctrl+Shift+A`) for Anthropic, OpenAI, OpenRouter, DeepSeek, Hugging Face, OpenCode Zen / Go or any OpenAI compatible server. It can create files, read your project, run terminal commands (with your approval) and ask you questions through built-in tools. Add a custom prompt and your API key in Settings > Preferences > AI; **No AI** removes every AI control. See [`ai.md`](Documentation/ai.md).
+
 ### Themes
 Stock presets: **GitHub, Windows 11, Warm** (each with a Dark variant), **VS Code Light/Dark**, **Glass Light/Dark**, **TTY, opencode, Gruvbox, Nord, Catppuccin**. Create your own as `.jsonc` files or with the in-app theme editor.
 
@@ -230,6 +233,7 @@ makdown [file] [--debug] [--native-frame] [--version] [--help]
 | `Ctrl+P` | Go to file |
 | `Ctrl+Shift+F` | Find in files |
 | `Ctrl+Shift+G` | Git clone tab |
+| `Ctrl+Shift+A` | AI assistant tab |
 | `Ctrl+\`` | Show / hide console |
 | `F2 / Del` | Rename / delete in explorer |
 | `F5` | Refresh preview |
@@ -337,6 +341,7 @@ MakDown/
 │   ├── syntax.cpp         syntax packs: load / match
 │   ├── syntaxstock.cpp    stock packs as JSON strings
 │   ├── lang.cpp           interface languages: load, lookup, plural rules
+│   ├── ai.cpp             AI providers, request formats, system prompt, tool protocol, file sandbox
 │   ├── langstock.cpp      GENERATED from lang/*.json (scripts/gen-lang.py)
 │   ├── search.cpp         regex builder, file walker, fuzzy score, globs
 │   ├── anim.cpp           global animation level
@@ -346,7 +351,8 @@ MakDown/
 │   ├── mainwindow.cpp     window, themed chrome, menus, files, command line
 │   ├── editor.cpp         editor, gutter, Markdown highlighter, vim engine
 │   ├── synhl.cpp          generic highlighter that runs a syntax pack
-│   ├── sidebar.cpp        left rail (Files / Search / Git)
+│   ├── sidebar.cpp        left rail (Files / Search / Git / AI)
+│   ├── aipanel.cpp        AI assistant chat + agent loop + tools
 │   ├── explorer.cpp       folder tree
 │   ├── searchtab.cpp      find in files (worker thread)
 │   ├── quickopen.cpp      go to file (worker thread, fuzzy)
@@ -408,6 +414,7 @@ Expected failures are known issues in the code. Known failures:
 | [`window-frame.md`](Documentation/window-frame.md) | Windows custom title bar and themed window border |
 | [`syntax.md`](Documentation/syntax.md) | Syntax pack format and scopes |
 | [`languages.md`](Documentation/languages.md) | Interface language files, adding a translation, plural rules |
+| [`ai.md`](Documentation/ai.md) | AI assistant: providers, custom prompt, tools, No AI switch, safety |
 | [`hotkeys.md`](Documentation/hotkeys.md) | All shortcuts and vim keys |
 | [`search.md`](Documentation/search.md) | Find/replace, go to file, find in files |
 | [`browser.md`](Documentation/browser.md) | Side bar, explorer, browser tab, live reload |

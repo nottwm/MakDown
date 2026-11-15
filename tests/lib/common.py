@@ -123,7 +123,7 @@ def ensure_harness_built() -> Path:
             return HARNESS
         HARNESS.parent.mkdir(parents=True, exist_ok=True)
         defs = ["-DMAKDOWN_UNX"]
-        pkgs = "Qt6Widgets Qt6Test"
+        pkgs = "Qt6Widgets Qt6Network Qt6Test"
         if "-DMAKDOWN_WEBENGINE" in read(BUILD / ".cfg"):
             defs.append("-DMAKDOWN_WEBENGINE")
             pkgs += " Qt6WebEngineWidgets"

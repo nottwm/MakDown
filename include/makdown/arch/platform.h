@@ -8,6 +8,7 @@
 #include <QtGlobal>
 #include <functional>
 
+class QProcess;
 class QWidget;
 
 namespace platform {
@@ -45,4 +46,13 @@ namespace platform {
     int frameCornerRadius();
     // Call from QWidget::nativeEvent(). Returns true when the message was consumed.
     bool frameNativeEvent(QWidget* w, const QByteArray& eventType, void* message, NativeResult* result);
+
+    // ---- running one shell command (the AI assistant's run_command tool) --------------------------
+    // Name of the shell a command runs in, for display: "/bin/sh" or "cmd.exe".
+    QString shellName();
+    // Points `p` at the OS shell with `command` as its one-line script, in its own process group so that
+    // killProcessTree() can stop everything the command started. Does not start it.
+    void prepareShellCommand(QProcess* p, const QString& command);
+    // Kills the process and its children (a timed-out or cancelled command).
+    void killProcessTree(QProcess* p);
 }

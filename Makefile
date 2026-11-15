@@ -97,7 +97,7 @@ ifeq ($(WEBENGINE),yes)
   endif
 endif
 
-PKGS       := $(QT)Widgets
+PKGS       := $(QT)Widgets $(QT)Network
 ifneq ($(WE_FOUND),)
   PKGS += $(QT)WebEngineWidgets
   DEFS += -DMAKDOWN_WEBENGINE

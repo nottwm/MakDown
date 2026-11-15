@@ -12,6 +12,7 @@
 #include <makdown/arch/platform.h>
 #include <QDir>
 #include <QHash>
+#include <QProcess>
 #include <QWidget>
 #include <cstdio>
 #include <windows.h>
@@ -176,5 +177,23 @@ bool frameNativeEvent(QWidget* w, const QByteArray& eventType, void* message, Na
     default:
         return false;
     }
+}
+
+// ---- one shell command (the AI assistant's run_command tool) -------------------------------------------
+QString shellName() { return qEnvironmentVariable("COMSPEC", QStringLiteral("cmd.exe")); }
+
+void prepareShellCommand(QProcess* p, const QString& command) {
+    p->setProgram(shellName());
+    p->setNativeArguments(QStringLiteral("/d /s /c \"") + command + QStringLiteral("\""));    // cmd.exe parses its own command line
+    p->setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments* a) { a->flags |= CREATE_NO_WINDOW; });   // no console flash (GUI exe)
+}
+
+void killProcessTree(QProcess* p) {
+    if (p->state() == QProcess::NotRunning) return;
+    QProcess killer;                                         // taskkill /T walks the child tree
+    killer.setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments* a) { a->flags |= CREATE_NO_WINDOW; });
+    killer.start(QStringLiteral("taskkill"), {QStringLiteral("/PID"), QString::number(p->processId()), QStringLiteral("/T"), QStringLiteral("/F")});
+    killer.waitForFinished(3000);
+    p->kill();
 }
 }

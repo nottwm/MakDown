@@ -18,6 +18,7 @@ Nothing is sent anywhere until you press **Send**, and everything can be switche
 | **Model** | Pick a suggestion or type any model id your provider offers. Defaults are only suggestions; model names change, so check your provider's list. |
 | **Custom prompt** | Text added on top of MakDown's own prompt in every conversation: language, tone, house style, project rules. It is placed after MakDown's prompt and cannot switch off the confirmation dialogs. *Show MakDown's built-in prompt...* displays the part you build on. |
 | **Ask before files / commands** | Confirmation dialogs for creating or overwriting files and for running commands (both on by default). |
+| **Stream replies** | On by default. The thinking card and the answer grow while the model writes them (server-sent events, Anthropic and OpenAI formats). Turn it off for a server that cannot stream; a server that answers in one piece despite the request is handled automatically. |
 | **Show the model's thinking** | Shows the reasoning some models return as a collapsed *Thinking* card above the answer (click to open). Reasoning is for you only and is never sent back to the model. On by default. |
 | **Extended thinking budget** | Anthropic only: off, or at least 1024 tokens the model may think with before answering. Other providers think by themselves (reasoning models) or not at all. |
 | **Most steps per message** | Safety limit for the tool loop (default 25). |
@@ -37,7 +38,7 @@ Everything except Anthropic uses the OpenAI `chat/completions` format. OpenCode 
 
 ## Using the assistant
 
-The chat shows your messages as bubbles, the assistant's answers as rendered Markdown, and everything the assistant *does* as cards: a collapsed **Thinking** card (with a word count) when the model reasons, and one card per tool call with a green / amber / red dot for ok / denied / error. Click a card to open its details (the file written, the command's output). While a request runs an animated *Thinking...* row is shown. The provider and model line under the title opens the AI settings. An empty chat offers a few starter prompts.
+The chat shows your messages as bubbles, the assistant's answers as rendered Markdown, and everything the assistant *does* as cards: a collapsed **Thinking** card (with a word count) when the model reasons, and one card per tool call with a green / amber / red dot for ok / denied / error. Click a card to open its details (the file written, the command's output). While a request is waiting for its first words an animated *Thinking...* row is shown; then the reasoning appears in an open Thinking card that grows live and folds away when the answer starts (it stays open if you opened it yourself), and the answer is typed out below it. Tool calls are never shown as raw text: while the model writes one the row reads *Preparing an action*, and the finished call appears as a card. *Stop* keeps what has arrived but does not add the partial answer to the conversation. The provider and model line under the title opens the AI settings. An empty chat offers a few starter prompts.
 
 Thinking is picked up from Anthropic `thinking` blocks, the `reasoning_content` / `reasoning` fields (DeepSeek, OpenCode, OpenRouter, ...) and inline `<think>...</think>` text (Qwen and similar).
 
@@ -78,4 +79,4 @@ The tools are described in the system prompt and implemented in the app (`ui/aip
 
 ## Limits
 
-Replies are not streamed (you see the thinking and the answer when the reply is complete). Conversations are not saved between runs. Tool calls are plain text, so a model that ignores the format simply answers in prose.
+Conversations are not saved between runs. Tool calls run after the model has finished its message, not while it is still writing it. Tool calls are plain text, so a model that ignores the format simply answers in prose.

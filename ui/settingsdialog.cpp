@@ -455,6 +455,7 @@ QWidget* SettingsDialog::buildAiPage() {
     Ai::Config& cfg = Ai::config();
     addCheck(bv, L("ai.set.confirmFiles"), QString(), &cfg.confirmFiles);
     addCheck(bv, L("ai.set.confirmCmd"), L("ai.set.confirmCmdHint"), &cfg.confirmCommands);
+    addCheck(bv, L("ai.set.stream"), L("ai.set.streamHint"), &cfg.stream);
     addCheck(bv, L("ai.set.showThinking"), L("ai.set.showThinkingHint"), &cfg.showThinking);
     aiBudget_ = new QSpinBox; aiBudget_->setRange(0, 64000); aiBudget_->setSingleStep(1024); aiBudget_->setSpecialValueText(L("ai.set.off")); aiBudget_->setValue(cfg.thinkingBudget);
     auto* bf = new QFormLayout; bf->addRow(L("ai.set.budget"), aiBudget_); bv->addLayout(bf);

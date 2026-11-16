@@ -94,6 +94,7 @@ void loadConfig() {
     c.confirmFiles = o["confirmFiles"].toBool(c.confirmFiles);
     c.confirmCommands = o["confirmCommands"].toBool(c.confirmCommands);
     c.maxSteps = qBound(1, o["maxSteps"].toInt(c.maxSteps), 100);
+    c.stream = o["stream"].toBool(c.stream);
     c.showThinking = o["showThinking"].toBool(c.showThinking);
     c.thinkingBudget = o["thinkingBudget"].toInt(c.thinkingBudget);
     if (c.thinkingBudget != 0) c.thinkingBudget = qBound(1024, c.thinkingBudget, 64000);
@@ -119,6 +120,7 @@ void saveConfig() {
     o["confirmFiles"] = c.confirmFiles;
     o["confirmCommands"] = c.confirmCommands;
     o["maxSteps"] = c.maxSteps;
+    o["stream"] = c.stream;
     o["showThinking"] = c.showThinking;
     o["thinkingBudget"] = c.thinkingBudget;
     QJsonObject provs;
@@ -158,7 +160,7 @@ static QList<Message> mergeSameRole(const QList<Message>& in) {      // both API
     return out;
 }
 
-Request buildRequest(const Config& c, const QString& system, const QList<Message>& history) {
+Request buildRequest(const Config& c, const QString& system, const QList<Message>& history, bool stream) {
     Request r;
     const Provider* p = findProvider(c.provider);
     if (!p) { r.error = "Unknown AI provider: " + c.provider; return r; }
@@ -195,6 +197,7 @@ Request buildRequest(const Config& c, const QString& system, const QList<Message
         for (const Message& m : msgs) arr.append(QJsonObject{{"role", m.role}, {"content", m.content}});
     }
     body["messages"] = arr;
+    if (stream) body["stream"] = true;
     r.body = QJsonDocument(body).toJson(QJsonDocument::Compact);
     return r;
 }
@@ -256,6 +259,126 @@ Reply parseReply(Api api, int status, const QByteArray& raw) {
     r.thinking = r.thinking.trimmed();
     r.ok = true;
     return r;
+}
+
+// ---------------------------------------------------------------------------------------------
+// streaming
+// ---------------------------------------------------------------------------------------------
+namespace {
+// how many characters at the end of `buf` could be the start of one of `tags` (a tag cut by the chunk boundary)
+int partialTagLen(const QString& buf, const QStringList& tags) {
+    int best = 0;
+    for (const QString& t : tags)
+        for (int k = qMin(t.size() - 1, int(buf.size())); k > best; --k)
+            if (buf.endsWith(t.left(k))) { best = k; break; }
+    return best;
+}
+} // namespace
+
+StreamParser::Delta StreamParser::feed(const QByteArray& chunk) {
+    Delta d;
+    lineBuf_ += chunk;
+    int nl;
+    while ((nl = lineBuf_.indexOf('\n')) >= 0) {
+        QByteArray line = lineBuf_.left(nl);
+        lineBuf_.remove(0, nl + 1);
+        if (line.endsWith('\r')) line.chop(1);
+        handleLine(line, &d);
+    }
+    return d;
+}
+
+StreamParser::Delta StreamParser::finish() {
+    Delta d;
+    if (!lineBuf_.isEmpty()) { QByteArray l = lineBuf_; lineBuf_.clear(); if (l.endsWith('\r')) l.chop(1); handleLine(l, &d); }
+    addText(QString(), &d, true);
+    return d;
+}
+
+void StreamParser::addThinking(const QString& s, Delta* d) {
+    if (s.isEmpty()) return;
+    thinking_ += s; d->thinking += s;
+}
+
+// Routes answer text: whatever sits between <think> and </think> is reasoning. Tags may be cut by a chunk boundary.
+void StreamParser::addText(const QString& piece, Delta* d, bool flush) {
+    static const QStringList opens = {"<think>", "<thinking>"}, closes = {"</think>", "</thinking>"};
+    tagBuf_ += piece;
+    auto put = [&](const QString& s) {
+        if (s.isEmpty()) return;
+        if (inThink_) { thinking_ += s; d->thinking += s; } else { text_ += s; d->text += s; }
+    };
+    while (!tagBuf_.isEmpty()) {
+        const QStringList& tags = inThink_ ? closes : opens;
+        int at = -1, len = 0;
+        for (const QString& t : tags) { const int i = tagBuf_.indexOf(t); if (i >= 0 && (at < 0 || i < at || (i == at && t.size() > len))) { at = i; len = t.size(); } }
+        if (at >= 0) { put(tagBuf_.left(at)); tagBuf_.remove(0, at + len); inThink_ = !inThink_; continue; }
+        const int keep = flush ? 0 : partialTagLen(tagBuf_, tags);
+        put(tagBuf_.left(tagBuf_.size() - keep));
+        tagBuf_ = tagBuf_.right(keep);
+        break;
+    }
+}
+
+void StreamParser::handleLine(const QByteArray& line, Delta* d) {
+    if (line.isEmpty() || line.startsWith(':') || !line.startsWith("data:")) return;      // comments, event:, id:, retry:
+    const QByteArray payload = line.mid(5).trimmed();
+    if (payload.isEmpty()) return;
+    if (payload == "[DONE]") { done_ = true; return; }
+    QJsonParseError pe;
+    const QJsonDocument doc = QJsonDocument::fromJson(payload, &pe);
+    if (pe.error != QJsonParseError::NoError || !doc.isObject()) return;
+    saw_ = true;
+    const QJsonObject o = doc.object();
+    if (o.contains("error") && !o["error"].isNull()) {
+        const QJsonValue e = o["error"];
+        error_ = e.isObject() ? e.toObject()["message"].toString() : e.toString();
+        if (error_.isEmpty()) error_ = QString::fromUtf8(payload.left(300));
+        return;
+    }
+    if (api_ == Api::Anthropic) {
+        const QString type = o["type"].toString();
+        if (type == "content_block_start") {
+            if (o["content_block"].toObject()["type"].toString() == "redacted_thinking")
+                addThinking(QStringLiteral("(the provider hid this part of the reasoning)\n\n"), d);
+        } else if (type == "content_block_delta") {
+            const QJsonObject dl = o["delta"].toObject();
+            const QString dt = dl["type"].toString();
+            if (dt == "text_delta") addText(dl["text"].toString(), d);
+            else if (dt == "thinking_delta") addThinking(dl["thinking"].toString(), d);
+        } else if (type == "message_delta") {
+            if (o["delta"].toObject()["stop_reason"].toString() == "max_tokens") truncated_ = true;
+        } else if (type == "message_stop") {
+            done_ = true;
+        }
+        return;
+    }
+    const QJsonArray choices = o["choices"].toArray();
+    if (choices.isEmpty()) return;
+    const QJsonObject ch = choices.first().toObject();
+    const QJsonObject dl = ch["delta"].toObject();
+    const QJsonValue c = dl["content"];
+    if (c.isString()) addText(c.toString(), d);
+    else for (const QJsonValue& v : c.toArray()) addText(v.toObject()["text"].toString(), d);
+    bool got = false;
+    for (const char* k : {"reasoning_content", "reasoning"})
+        if (dl[k].isString() && !dl[k].toString().isEmpty()) { addThinking(dl[k].toString(), d); got = true; break; }
+    if (!got) for (const QJsonValue& v : dl["reasoning_details"].toArray()) addThinking(v.toObject()["text"].toString(), d);
+    if (ch["finish_reason"].toString() == "length") truncated_ = true;
+}
+
+bool streamInToolBlock(const QString& t) { return t.lastIndexOf("<makdown_tool") > t.lastIndexOf("</makdown_tool>"); }
+
+QString streamPreview(const QString& t) {
+    QString s = parseToolCalls(t).text;
+    const int i = s.indexOf("<makdown_tool");               // an unterminated block comes back as text: cut it off
+    if (i >= 0) s = s.left(i);
+    const QString tag = QStringLiteral("<makdown_tool");     // a tag cut in the middle: "<makdown_to"
+    for (int k = qMin(tag.size() - 1, int(s.size())); k >= 1; --k)
+        if (s.endsWith(tag.left(k))) { s.chop(k); break; }
+    static const QRegularExpression danglingFence("\\n?```[A-Za-z]*\\s*$");   // the code fence a model opened before the block
+    s.remove(danglingFence);
+    return s.trimmed();
 }
 
 // ---------------------------------------------------------------------------------------------

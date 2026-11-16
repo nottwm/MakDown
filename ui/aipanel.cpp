@@ -186,6 +186,9 @@ AiPanel::AiPanel(QWidget* parent) : QWidget(parent) {
     dots_ = new QTimer(this); dots_->setInterval(380);
     connect(dots_, &QTimer::timeout, this, [this] { dotStep_ = (dotStep_ + 1) % 4; pendingLbl_->setText(pendingBase_ + QString(dotStep_, '.')); });
 
+    flush_ = new QTimer(this); flush_->setSingleShot(true); flush_->setInterval(50);
+    connect(flush_, &QTimer::timeout, this, [this] { flushLive(); });
+
     connect(sendBtn_, &QPushButton::clicked, this, [this] { if (busy_) stop(); else submit(); });
     connect(newBtn_, &QToolButton::clicked, this, [this] { newChat(); });
     connect(setBtn_, &QToolButton::clicked, this, [this] { emit settingsRequested(); });
@@ -347,7 +350,7 @@ static QWidget* cardWith(const QString& objectName, const QString& title, const 
 QWidget* AiPanel::makeItem(int index) {
     const Entry& e = entries_.at(index);
     const QString muted = theme_.color("muted");
-    auto remember = [this, index](bool on) { if (index < entries_.size()) entries_[index].expanded = on; };
+    auto remember = [this, index](bool on) { if (index < entries_.size()) { entries_[index].expanded = on; entries_[index].touched = true; } };
     switch (e.kind) {
     case Entry::User: {
         auto* f = new QFrame; f->setObjectName("aiUser");
@@ -395,8 +398,8 @@ QWidget* AiPanel::makeItem(int index) {
     return new QWidget;
 }
 
-void AiPanel::addEntry(Entry::Kind k, const QString& text, const QString& title, const QString& status) {
-    Entry e{k, title, text, QString(), status, false};
+int AiPanel::addEntry(Entry::Kind k, const QString& text, const QString& title, const QString& status, bool expanded) {
+    Entry e{k, title, text, QString(), status, expanded, false};
     if (k == Entry::Assistant) {
         QTextDocument d; d.setHtml(bodyOf(renderMarkdownToHtml(text, theme_, false, QString())));
         e.plain = d.toPlainText().trimmed();
@@ -412,6 +415,47 @@ void AiPanel::addEntry(Entry::Kind k, const QString& text, const QString& title,
     updateEmpty();
     if (k == Entry::User) stick_ = true;
     scrollDown(false);
+    return entries_.size() - 1;
+}
+
+// Rebuild one item's widget (after its state changed in a way that is easier to redraw than to patch).
+void AiPanel::refreshItem(int index) {
+    if (index < 0 || index >= items_.size()) return;
+    QWidget* old = items_[index];
+    QWidget* neu = makeItem(index);
+    list_->insertWidget(list_->indexOf(old), neu);
+    list_->removeWidget(old);
+    old->deleteLater();
+    items_[index] = neu;
+}
+
+void AiPanel::removeLastEntry() {
+    if (entries_.isEmpty()) return;
+    QWidget* w = items_.takeLast();
+    list_->removeWidget(w); w->deleteLater();
+    entries_.removeLast();
+    updateEmpty();
+}
+
+QString AiPanel::wordsLabel(const QString& text) {
+    return Ln("ai.words", text.split(QRegularExpression("\\s+"), Qt::SkipEmptyParts).size());
+}
+
+void AiPanel::setAssistantText(int index, const QString& markdown) {
+    if (index < 0 || index >= entries_.size()) return;
+    entries_[index].text = markdown;
+    if (auto* b = items_[index]->findChild<QTextBrowser*>()) {
+        b->setHtml(bodyOf(renderMarkdownToHtml(markdown, theme_, false, host_.workDir ? host_.workDir() : QString())));
+        entries_[index].plain = b->toPlainText().trimmed();
+    }
+}
+
+void AiPanel::setThinkingText(int index, const QString& text) {
+    if (index < 0 || index >= entries_.size()) return;
+    Entry& e = entries_[index];
+    e.text = text; e.title = wordsLabel(text); e.plain = L("ai.thought") + "\n" + text;
+    if (auto* l = items_[index]->findChild<QLabel*>("aiThinkBody")) l->setText(text);
+    if (auto* l = items_[index]->findChild<QLabel*>("aiCardSub")) l->setText(e.title);
 }
 
 void AiPanel::rebuild() {
@@ -509,7 +553,7 @@ void AiPanel::callModel() {
     pc.custom = cfg.customPrompt;
     pc.os = QSysInfo::prettyProductName();
     pc.shell = platform::shellName();
-    const Ai::Request rq = Ai::buildRequest(cfg, Ai::systemPrompt(pc), history_);
+    const Ai::Request rq = Ai::buildRequest(cfg, Ai::systemPrompt(pc), history_, cfg.stream);
     if (!rq.error.isEmpty()) { addEntry(Entry::Error, rq.error); finish(); return; }
 
     QNetworkRequest req{QUrl(rq.url)};
@@ -518,34 +562,113 @@ void AiPanel::callModel() {
     req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
     const Ai::Provider* prov = Ai::findProvider(cfg.provider);
     const Ai::Api api = prov ? prov->api : Ai::Api::OpenAI;
+    parser_.reset(new Ai::StreamParser(api));
+    rawBody_.clear(); httpStatus_ = 0; liveStream_ = cfg.stream; nonSse_ = sniffed_ = thinkCollapsed_ = false;
+    liveThink_ = liveAsst_ = -1;
     reply_ = nam_->post(req, rq.body);
+    connect(reply_, &QNetworkReply::readyRead, this, [this] { onData(); });
     connect(reply_, &QNetworkReply::finished, this, [this, api] { onReply(api); });
+}
+
+// Bytes of the reply arrived. A streamed reply is parsed on the fly; an error body or a plain JSON reply (a server that
+// ignores "stream") is only collected and handled when the reply ends.
+void AiPanel::onData() {
+    if (!reply_ || cancelled_) return;
+    const QByteArray chunk = reply_->readAll();
+    if (httpStatus_ == 0) httpStatus_ = reply_->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    if (rawBody_.size() < (8 << 20)) rawBody_ += chunk;
+    if (!liveStream_ || httpStatus_ < 200 || httpStatus_ >= 300) return;
+    if (!sniffed_) {
+        for (char ch : rawBody_) {
+            if (ch == ' ' || ch == '\n' || ch == '\r' || ch == '\t') continue;
+            sniffed_ = true; nonSse_ = ch == '{' || ch == '[';
+            if (nonSse_) break;
+            parser_->feed(rawBody_);                       // everything so far (the first chunk) goes to the parser
+            flushLive();
+            return;
+        }
+        if (!sniffed_) return;
+    }
+    if (nonSse_) return;
+    parser_->feed(chunk);
+    if (!flush_->isActive()) flush_->start();
+}
+
+// Shows what the stream has produced so far: the thinking card (open while it grows) and the answer.
+void AiPanel::flushLive() {
+    flush_->stop();
+    if (!parser_ || cancelled_ || nonSse_) return;
+    const Ai::Config& cfg = Ai::config();
+    const QString think = parser_->thinking().trimmed();
+    const QString raw = parser_->text();
+    const QString text = Ai::streamPreview(raw);
+    bool changed = false;
+    if (cfg.showThinking && !think.isEmpty()) {
+        if (liveThink_ < 0) { hidePending(); liveThink_ = addEntry(Entry::Thinking, think, wordsLabel(think), QString(), true); }
+        else setThinkingText(liveThink_, think);
+        changed = true;
+    }
+    if (!text.isEmpty()) {
+        if (liveThink_ >= 0 && !thinkCollapsed_) {                     // the answer started: fold the reasoning away
+            thinkCollapsed_ = true;
+            if (!entries_[liveThink_].touched) { entries_[liveThink_].expanded = false; refreshItem(liveThink_); }
+        }
+        if (liveAsst_ < 0) { hidePending(); liveAsst_ = addEntry(Entry::Assistant, text); }
+        else setAssistantText(liveAsst_, text);
+        changed = true;
+    }
+    if (Ai::streamInToolBlock(raw) && list_->indexOf(pending_) < 0) showPending(L("ai.preparing"));    // an action is being written
+    if (changed) { scrollDown(false); emit contentUpdated(); }
 }
 
 void AiPanel::onReply(Ai::Api api) {
     QNetworkReply* r = reply_;
     reply_ = nullptr;
     r->deleteLater();
+    flush_->stop();
+    const QByteArray rest = r->isOpen() ? r->readAll() : QByteArray();      // an aborted reply is closed
+    if (rawBody_.size() < (8 << 20)) rawBody_ += rest;
+    if (httpStatus_ == 0) httpStatus_ = r->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    const int status = httpStatus_;
     hidePending();
-    if (cancelled_) { addEntry(Entry::Notice, L("ai.stopped")); finish(); return; }
+    if (cancelled_) { addEntry(Entry::Notice, L("ai.stopped")); finish(); return; }          // what streamed in stays on screen
+    const bool okStatus = status >= 200 && status < 300;
+    if (status == 0 || (okStatus && r->error() != QNetworkReply::NoError)) { addEntry(Entry::Error, r->errorString()); finish(); return; }
 
-    const int status = r->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-    const QByteArray body = r->readAll();
-    if (status == 0) { addEntry(Entry::Error, r->errorString()); finish(); return; }
-    const Ai::Reply rep = Ai::parseReply(api, status, body);
+    Ai::Reply rep;
+    if (liveStream_ && okStatus && sniffed_ && !nonSse_) {
+        parser_->feed(rest);
+        parser_->finish();
+        if (!parser_->error().isEmpty()) { addEntry(Entry::Error, parser_->error()); finish(); return; }
+        rep.ok = true;
+        rep.text = parser_->text().trimmed();
+        if (parser_->truncated()) rep.text += "\n\n[MakDown: the reply was cut off at the output limit]";
+        rep.thinking = parser_->thinking().trimmed();
+    } else {
+        rep = Ai::parseReply(api, status, rawBody_);
+    }
     if (!rep.ok) { addEntry(Entry::Error, rep.error); finish(); return; }
+
+    const bool showThink = Ai::config().showThinking && !rep.thinking.isEmpty();
     if (rep.text.trimmed().isEmpty()) {
-        if (Ai::config().showThinking && !rep.thinking.isEmpty()) addEntry(Entry::Thinking, rep.thinking, QString());
+        if (showThink && liveThink_ < 0) addEntry(Entry::Thinking, rep.thinking, wordsLabel(rep.thinking));
         addEntry(Entry::Notice, L("ai.emptyReply")); finish(); return;
     }
 
     history_.append({"assistant", rep.text});
-    if (Ai::config().showThinking && !rep.thinking.isEmpty()) {            // reasoning first, collapsed, above the answer
-        const int words = rep.thinking.split(QRegularExpression("\\s+"), Qt::SkipEmptyParts).size();
-        addEntry(Entry::Thinking, rep.thinking, Ln("ai.words", words));
+    // the reasoning card: finish the live one (folded), or make it now for a reply that did not stream
+    if (showThink) {
+        if (liveThink_ >= 0) {
+            setThinkingText(liveThink_, rep.thinking);
+            if (!entries_[liveThink_].touched && entries_[liveThink_].expanded) { entries_[liveThink_].expanded = false; refreshItem(liveThink_); }
+        } else addEntry(Entry::Thinking, rep.thinking, wordsLabel(rep.thinking));
     }
     const Ai::Parsed parsed = Ai::parseToolCalls(rep.text);
-    if (!parsed.text.isEmpty()) addEntry(Entry::Assistant, parsed.text);
+    if (liveAsst_ >= 0) {
+        if (parsed.text.isEmpty() && liveAsst_ == entries_.size() - 1) removeLastEntry();   // only a tool call was written
+        else setAssistantText(liveAsst_, parsed.text);
+    } else if (!parsed.text.isEmpty()) addEntry(Entry::Assistant, parsed.text);
+    liveThink_ = liveAsst_ = -1;
     if (parsed.calls.isEmpty()) { finish(); return; }
 
     QStringList results;

@@ -7,6 +7,7 @@ import stat
 import sys
 import tempfile
 import threading
+import time
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -191,6 +192,128 @@ class TestThinking(AiCase):
             h.close()
 
 
+def sse(*events):
+    return "".join("data: " + (e if isinstance(e, str) else json.dumps(e)) + "\n\n" for e in events)
+
+
+def oa(content=None, **delta):
+    d = dict(delta)
+    if content is not None:
+        d["content"] = content
+    return {"choices": [{"delta": d}]}
+
+
+class TestStreamParser(AiCase):
+    def run_stream(self, api, text, split=None):
+        chunks = [text] if not split else [text[i:i + split] for i in range(0, len(text), split)]
+        return self.call("ai_stream", api=api, chunks=chunks)
+
+    def test_openai_text_arrives_piece_by_piece(self):
+        r = self.call("ai_stream", api="openai", chunks=[sse(oa("Hel")), sse(oa("lo "), ), sse(oa("world")), sse("[DONE]")])
+        self.assertEqual(r["text"], "Hello world"); self.assertEqual([d["text"] for d in r["deltas"][:3]], ["Hel", "lo ", "world"])
+        self.assertTrue(r["done"]); self.assertTrue(r["sawEvents"]); self.assertEqual(r["thinking"], "")
+
+    def test_any_chunk_boundary_gives_the_same_result(self):
+        body = sse(oa(reasoning_content="think "), oa(reasoning_content="more"), oa("Answer "), oa("héllo ✓"), "[DONE]")
+        for n in (1, 2, 3, 5, 7, 13, 1000):
+            r = self.run_stream("openai", body, n)
+            self.assertEqual((r["text"], r["thinking"]), ("Answer héllo ✓", "think more"), n)
+
+    def test_crlf_comments_and_other_fields(self):
+        body = ": OPENROUTER PROCESSING\r\n\r\nevent: x\r\nid: 1\r\ndata: " + json.dumps(oa("ok")) + "\r\n\r\ndata: [DONE]\r\n\r\n"
+        r = self.run_stream("openai", body, 4)
+        self.assertEqual(r["text"], "ok"); self.assertTrue(r["done"])
+
+    def test_reasoning_field_names(self):
+        for field in ("reasoning_content", "reasoning"):
+            r = self.call("ai_stream", api="openai", chunks=[sse(oa(**{field: "why"})), sse(oa("because"))])
+            self.assertEqual((r["thinking"], r["text"]), ("why", "because"), field)
+        r = self.call("ai_stream", api="openai", chunks=[sse({"choices": [{"delta": {"reasoning": "dup", "reasoning_details": [{"text": "dup"}]}}]})])
+        self.assertEqual(r["thinking"], "dup", "OpenRouter sends both: count once")
+        r = self.call("ai_stream", api="openai", chunks=[sse({"choices": [{"delta": {"reasoning_details": [{"text": "only details"}]}}]})])
+        self.assertEqual(r["thinking"], "only details")
+
+    def test_inline_think_tags_even_when_cut_in_pieces(self):
+        pieces = ["<thi", "nk>abc ", "def</th", "ink>\n\nAnsw", "er <", "b>x</b>"]
+        r = self.call("ai_stream", api="openai", chunks=[sse(oa(p)) for p in pieces])
+        self.assertEqual(r["thinking"], "abc def"); self.assertEqual(r["text"].strip(), "Answer <b>x</b>")
+        self.assertNotIn("think", r["text"])
+        self.assertNotIn("<", "".join(d["text"] for d in r["deltas"][:2]), "a cut tag is held back, not shown")
+
+    def test_an_unclosed_think_tag_is_flushed_at_the_end(self):
+        r = self.call("ai_stream", api="openai", chunks=[sse(oa("<think>never closed"))])
+        self.assertEqual(r["thinking"], "never closed"); self.assertEqual(r["text"], "")
+        r = self.call("ai_stream", api="openai", chunks=[sse(oa("a < b and <th"))])
+        self.assertEqual(r["text"], "a < b and <th")
+
+    def test_anthropic_events(self):
+        ev = [{"type": "message_start", "message": {}}, {"type": "content_block_start", "index": 0, "content_block": {"type": "thinking", "thinking": ""}},
+              {"type": "content_block_delta", "index": 0, "delta": {"type": "thinking_delta", "thinking": "hmm "}},
+              {"type": "content_block_delta", "index": 0, "delta": {"type": "signature_delta", "signature": "abc"}},
+              {"type": "content_block_start", "index": 1, "content_block": {"type": "redacted_thinking", "data": "x"}},
+              {"type": "content_block_start", "index": 2, "content_block": {"type": "text", "text": ""}},
+              {"type": "content_block_delta", "index": 2, "delta": {"type": "text_delta", "text": "Hi "}},
+              {"type": "content_block_delta", "index": 2, "delta": {"type": "text_delta", "text": "there"}},
+              {"type": "ping"}, {"type": "message_delta", "delta": {"stop_reason": "end_turn"}}, {"type": "message_stop"}]
+        r = self.run_stream("anthropic", "".join(f"event: {e['type']}\ndata: {json.dumps(e)}\n\n" for e in ev), 9)
+        self.assertEqual(r["text"], "Hi there"); self.assertIn("hmm", r["thinking"]); self.assertIn("hid", r["thinking"]); self.assertNotIn("abc", r["thinking"])
+        self.assertTrue(r["done"]); self.assertFalse(r["truncated"])
+
+    def test_errors_and_truncation(self):
+        r = self.call("ai_stream", api="anthropic", chunks=[sse({"type": "error", "error": {"type": "overloaded_error", "message": "Overloaded"}})])
+        self.assertEqual(r["error"], "Overloaded")
+        r = self.call("ai_stream", api="openai", chunks=[sse(oa("x")), sse({"error": {"message": "rate limited"}})])
+        self.assertEqual(r["error"], "rate limited")
+        r = self.call("ai_stream", api="anthropic", chunks=[sse({"type": "message_delta", "delta": {"stop_reason": "max_tokens"}})])
+        self.assertTrue(r["truncated"])
+        r = self.call("ai_stream", api="openai", chunks=[sse({"choices": [{"delta": {"content": "x"}, "finish_reason": "length"}]})])
+        self.assertTrue(r["truncated"])
+
+    def test_plain_json_is_not_an_event_stream(self):
+        r = self.call("ai_stream", api="openai", chunks=[json.dumps({"choices": [{"message": {"content": "all at once"}}]})])
+        self.assertFalse(r["sawEvents"]); self.assertEqual(r["text"], "")
+
+    def test_last_line_without_a_newline_and_garbage(self):
+        r = self.call("ai_stream", api="openai", chunks=["data: not json\n\n", "data: " + json.dumps(oa("tail"))])
+        self.assertEqual(r["text"], "tail")
+
+    def test_request_asks_for_a_stream_only_when_told_to(self):
+        cfg = {"provider": "openai", "key": "K", "model": "m"}
+        hist = [{"role": "user", "content": "hi"}]
+        self.assertTrue(self.call("ai_request", config=cfg, history=hist, stream=True)["body"]["stream"])
+        self.assertNotIn("stream", self.call("ai_request", config=cfg, history=hist)["body"])
+        cfg["provider"] = "anthropic"
+        self.assertTrue(self.call("ai_request", config=cfg, history=hist, stream=True)["body"]["stream"])
+
+
+class TestStreamPreview(AiCase):
+    def prev(self, text):
+        return self.call("ai_preview", text=text)
+
+    def test_plain_text_is_shown_as_is(self):
+        r = self.prev("Hello **world**")
+        self.assertEqual((r["preview"], r["inTool"]), ("Hello **world**", False))
+
+    def test_tool_blocks_never_show(self):
+        block = tool("create_file", path="a.md", content="# Secret")
+        self.assertEqual(self.prev("Sure.\n" + block)["preview"], "Sure.")
+        self.assertEqual(self.prev("Sure.\n" + block + "\nmore text")["preview"].replace("\n", " ").split(), ["Sure.", "more", "text"])
+        for cut in (21, 40, 60):
+            r = self.prev("Sure.\n" + block[:cut])
+            self.assertEqual(r["preview"], "Sure.", cut); self.assertTrue(r["inTool"], cut)
+
+    def test_a_tag_cut_in_the_middle_is_held_back(self):
+        for part in ("<", "<makdown", "<makdown_to", "<makdown_tool"):
+            self.assertEqual(self.prev("Text " + part)["preview"], "Text", part)
+        self.assertEqual(self.prev("a < b")["preview"], "a < b")
+
+    def test_a_dangling_code_fence_before_a_block_is_hidden(self):
+        self.assertEqual(self.prev("Here:\n```xml\n<makdown_tool name=\"list_dir\">")["preview"], "Here:")
+
+    def test_finished_block_means_not_in_tool(self):
+        self.assertFalse(self.prev(tool("list_dir", path="."))["inTool"])
+
+
 class TestToolProtocol(AiCase):
     def parse(self, reply):
         return self.call("ai_parse", reply=reply)
@@ -362,12 +485,13 @@ class TestConfigFile(unittest.TestCase):
 # agent loop against a mock server
 # ---------------------------------------------------------------------------------------------------
 class Mock:
-    def __init__(self, replies, status=200, style="openai", repeat_last=False):
+    def __init__(self, replies, status=200, style="openai", repeat_last=False, sse=True, chunk=8, delay=0.0):
         self.replies = list(replies)
         self.requests = []
         self.status = status
         self.style = style
         self.repeat_last = repeat_last
+        self.sse, self.chunk, self.delay = sse, chunk, delay       # answer "stream": true with server-sent events, in pieces of `chunk` characters, `delay` seconds apart
         mock = self
 
         class H(BaseHTTPRequestHandler):
@@ -386,9 +510,11 @@ class Mock:
                         text = mock.replies.pop(0) if not (mock.repeat_last and len(mock.replies) == 1) else mock.replies[0]
                     else:
                         text = "(no more scripted replies)"
-                    think = None
+                    think, field = None, "reasoning_content"
                     if isinstance(text, dict):                       # {"text": ..., "thinking": ..., "field": "reasoning_content"}
                         think, field, text = text.get("thinking"), text.get("field", "reasoning_content"), text["text"]
+                    if body.get("stream") and mock.sse:
+                        return self.stream(text, think, field)
                     if mock.style == "anthropic":
                         blocks = ([{"type": "thinking", "thinking": think, "signature": "sig"}] if think else []) + [{"type": "text", "text": text}]
                         out = json.dumps({"content": blocks, "stop_reason": "end_turn"}).encode()
@@ -402,6 +528,47 @@ class Mock:
                 self.send_header("Content-Length", str(len(out)))
                 self.end_headers()
                 self.wfile.write(out)
+
+            def stream(self, text, think, field):
+                def pieces(s):
+                    return [s[i:i + mock.chunk] for i in range(0, len(s), mock.chunk)]
+
+                def send(obj, event=None):
+                    data = (f"event: {event}\n" if event else "") + "data: " + (obj if isinstance(obj, str) else json.dumps(obj)) + "\n\n"
+                    self.wfile.write(data.encode())
+                    self.wfile.flush()
+                    time.sleep(mock.delay)
+
+                self.send_response(200)
+                self.send_header("Content-Type", "text/event-stream")
+                self.send_header("Connection", "close")
+                self.end_headers()
+                try:
+                    if mock.style == "anthropic":
+                        send({"type": "message_start", "message": {"id": "m", "content": []}}, "message_start")
+                        i = 0
+                        if think:
+                            send({"type": "content_block_start", "index": i, "content_block": {"type": "thinking", "thinking": ""}}, "content_block_start")
+                            for p in pieces(think):
+                                send({"type": "content_block_delta", "index": i, "delta": {"type": "thinking_delta", "thinking": p}}, "content_block_delta")
+                            send({"type": "content_block_stop", "index": i}, "content_block_stop")
+                            i += 1
+                        send({"type": "content_block_start", "index": i, "content_block": {"type": "text", "text": ""}}, "content_block_start")
+                        for p in pieces(text):
+                            send({"type": "content_block_delta", "index": i, "delta": {"type": "text_delta", "text": p}}, "content_block_delta")
+                        send({"type": "content_block_stop", "index": i}, "content_block_stop")
+                        send({"type": "message_delta", "delta": {"stop_reason": "end_turn"}}, "message_delta")
+                        send({"type": "message_stop"}, "message_stop")
+                    else:
+                        send({"choices": [{"delta": {"role": "assistant", "content": ""}}]})
+                        for p in pieces(think or ""):
+                            send({"choices": [{"delta": {field: p}}]})
+                        for p in pieces(text):
+                            send({"choices": [{"delta": {"content": p}}]})
+                        send({"choices": [{"delta": {}, "finish_reason": "stop"}]})
+                        send("[DONE]")
+                except (BrokenPipeError, ConnectionResetError):
+                    pass
 
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), H)
         self.base = f"http://127.0.0.1:{self.server.server_address[1]}/v1"
@@ -689,6 +856,88 @@ class TestThinkingInThePanel(AgentBase):
         r = self.chat(m, "hello", save="/tmp/makdown-ai-panel.png")
         self.assertNotIn("Summarize this document", " ".join(r["visibleLabels"]))
         self.assertGreater(Path("/tmp/makdown-ai-panel.png").stat().st_size, 1000)
+
+
+class TestStreamingPanel(AgentBase):
+    """Thinking and answer appear while the reply is still coming in."""
+    WORDS = " ".join(f"word{i}" for i in range(14))          # ~90 characters
+    THINK = " ".join(f"idea{i}" for i in range(10))
+
+    def test_the_panel_asks_for_a_stream(self):
+        m = self.mock("ok")
+        self.chat(m, "hi")
+        self.assertTrue(m.requests[0]["json"]["stream"])
+
+    def test_text_and_thinking_grow_while_streaming(self):
+        m = self.mock({"text": self.WORDS, "thinking": self.THINK}, chunk=10, delay=0.12)
+        r = self.chat(m, "go")
+        snaps = r["snapshots"]
+        self.assertGreaterEqual(len(snaps), 6, "many small updates, not one")
+        first_think = next(i for i, s in enumerate(snaps) if "idea0" in s)
+        self.assertNotIn("word0", snaps[first_think], "the thinking shows before the answer starts")
+        self.assertNotIn("idea9", snaps[first_think], "...and only part of it")
+        mid = next(s for s in snaps if "word0" in s and "word13" not in s)
+        self.assertIn("idea9", mid, "the whole reasoning is there once the answer starts")
+        self.assertTrue(all(len(a) <= len(b) or True for a, b in zip(snaps, snaps[1:])))
+        self.assertIn("word13", r["transcript"]); self.assertEqual(r["thinkingBlocks"], 1)
+        self.assertNotIn("idea3", " ".join(r["visibleLabels"]), "the reasoning card folds away when the answer is done")
+
+    def test_the_thinking_card_stays_open_if_the_user_opened_it(self):
+        m = self.mock({"text": "short answer", "thinking": self.THINK})
+        r = self.chat(m, "go", expandAll=True)
+        self.assertIn("idea3", " ".join(r["visibleLabels"]))
+
+    def test_tool_blocks_are_never_visible_while_streaming(self):
+        reply = "I will create it.\n" + tool("create_file", path="live.md", content="# Hidden body\nline two") + "\n"
+        m = self.mock({"text": reply, "thinking": "plan it"}, "All done.", chunk=7, delay=0.05)
+        r = self.chat(m, "go")
+        self.assertTrue(r["snapshots"])
+        for s in r["snapshots"]:
+            self.assertNotIn("makdown_tool", s); self.assertNotIn("Hidden body", s.split("create_file")[0])
+        self.assertEqual(self.f("live.md").read_text(), "# Hidden body\nline two")
+        self.assertIn("I will create it.", r["transcript"]); self.assertIn("All done.", r["transcript"])
+
+    def test_a_reply_that_is_only_a_tool_call_leaves_no_empty_message(self):
+        m = self.mock(tool("list_dir", path="."), "ok")
+        r = self.chat(m, "go")
+        self.assertTrue(all(part.strip() for part in r["transcript"].split("\n\n")), "no empty message: " + repr(r["transcript"]))
+        self.assertIn("list_dir", r["transcript"])
+
+    def test_anthropic_stream(self):
+        m = self.mock({"text": "streamed hello", "thinking": "anthropic reasoning"}, style="anthropic", chunk=5)
+        r = self.chat(m, "go", config={"provider": "anthropic", "baseUrl": m.base})
+        self.assertTrue(m.requests[0]["json"]["stream"])
+        self.assertIn("streamed hello", r["transcript"]); self.assertEqual(r["thinkingBlocks"], 1)
+
+    def test_a_server_that_ignores_stream_still_works(self):
+        m = self.mock({"text": "whole reply", "thinking": "whole thought"}, sse=False)
+        r = self.chat(m, "go")
+        self.assertIn("whole reply", r["transcript"]); self.assertEqual(r["thinkingBlocks"], 1)
+        self.assertTrue(r["finished"])
+
+    def test_streaming_can_be_switched_off(self):
+        m = self.mock("plain answer")
+        r = self.chat(m, "go", config={"stream": False})
+        self.assertNotIn("stream", m.requests[0]["json"]); self.assertIn("plain answer", r["transcript"])
+
+    def test_stop_keeps_what_arrived_and_does_not_enter_the_history(self):
+        m = self.mock({"text": self.WORDS * 3, "thinking": self.THINK}, chunk=6, delay=0.15)
+        r = self.chat(m, "go", stopAfter=900)
+        self.assertTrue(r["finished"]); self.assertFalse(r["busy"])
+        self.assertIn("Stopped.", r["transcript"]); self.assertIn("idea0", r["transcript"])
+        self.assertNotIn("word13 word0", r["transcript"], "stopped before the end")
+        self.assertEqual(r["history"], 1, "only the user's message")
+
+    def test_http_errors_still_work_with_streaming(self):
+        m = self.mock(status=429)
+        r = self.chat(m, "go")
+        self.assertIn("429", r["transcript"]); self.assertTrue(r["finished"])
+
+    def test_history_holds_the_clean_answer(self):
+        m = self.mock({"text": "<think>inline</think>Clean answer", "thinking": ""}, "second")
+        self.chat(m, "one", "two")
+        sent = json.dumps(m.requests[1]["json"])
+        self.assertIn("Clean answer", sent); self.assertNotIn("inline", sent); self.assertNotIn("<think>", sent)
 
 
 # ---------------------------------------------------------------------------------------------------

@@ -5,7 +5,7 @@
 
 static const char* const kLangen = R"JSON({
   "name": "English",
-  "revision": 4,
+  "revision": 5,
   "builtin": true,
   "plural": "one_other",
   "strings": {
@@ -422,14 +422,17 @@ static const char* const kLangen = R"JSON({
     "ai.set.showThinkingHint": "Shows the reasoning some models return (collapsed, above the answer). It is only for you: it is never sent back to the model.",
     "ai.set.budget": "Extended thinking budget",
     "ai.set.budgetHint": "Anthropic only. Off, or at least 1024 tokens the model may spend thinking before it answers. More is slower and costs more. Other providers think on their own (reasoning models) or not at all.",
-    "ai.set.off": "Off"
+    "ai.set.off": "Off",
+    "ai.preparing": "Preparing an action",
+    "ai.set.stream": "Stream replies",
+    "ai.set.streamHint": "Shows the thinking and the answer while the model writes them. Turn it off for a server that cannot stream (MakDown also copes by itself when a server answers in one piece)."
   }
 }
 )JSON";
 
 static const char* const kLangpl = R"JSON({
   "name": "Polski",
-  "revision": 4,
+  "revision": 5,
   "builtin": true,
   "plural": "polish",
   "strings": {
@@ -848,14 +851,17 @@ static const char* const kLangpl = R"JSON({
     "ai.set.showThinkingHint": "Pokazuje tok rozumowania zwracany przez niektóre modele (zwinięty, nad odpowiedzią). Tylko dla Ciebie: nigdy nie wraca do modelu.",
     "ai.set.budget": "Budżet rozszerzonego myślenia",
     "ai.set.budgetHint": "Tylko Anthropic. Wyłączony albo co najmniej 1024 tokeny, które model może przeznaczyć na myślenie przed odpowiedzią. Więcej to wolniej i drożej. Inni dostawcy myślą sami (modele rozumujące) albo wcale.",
-    "ai.set.off": "Wył."
+    "ai.set.off": "Wył.",
+    "ai.preparing": "Przygotowuję akcję",
+    "ai.set.stream": "Odpowiedzi strumieniowe",
+    "ai.set.streamHint": "Pokazuje rozumowanie i odpowiedź na bieżąco, gdy model je pisze. Wyłącz dla serwera bez strumieniowania (MakDown radzi sobie też sam, gdy serwer odpowiada w całości)."
   }
 }
 )JSON";
 
 static const char* const kLangru = R"JSON({
   "name": "Русский",
-  "revision": 4,
+  "revision": 5,
   "builtin": true,
   "plural": "east_slavic",
   "strings": {
@@ -1274,7 +1280,10 @@ static const char* const kLangru = R"JSON({
     "ai.set.showThinkingHint": "Показывает рассуждения, которые возвращают некоторые модели (свёрнуто, над ответом). Только для вас: модели они не отправляются.",
     "ai.set.budget": "Бюджет расширенного мышления",
     "ai.set.budgetHint": "Только Anthropic. Выключено либо не менее 1024 токенов, которые модель может потратить на размышления перед ответом. Больше - медленнее и дороже. Остальные провайдеры думают сами (модели-рассуждатели) или не думают вовсе.",
-    "ai.set.off": "Выкл."
+    "ai.set.off": "Выкл.",
+    "ai.preparing": "Готовлю действие",
+    "ai.set.stream": "Потоковые ответы",
+    "ai.set.streamHint": "Показывает размышления и ответ по мере того, как модель их пишет. Отключите для сервера без потоковой передачи (MakDown справляется и сам, если сервер отвечает целиком)."
   }
 }
 )JSON";

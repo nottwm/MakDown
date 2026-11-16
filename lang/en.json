@@ -1,6 +1,6 @@
 {
   "name": "English",
-  "revision": 4,
+  "revision": 5,
   "builtin": true,
   "plural": "one_other",
   "strings": {
@@ -417,6 +417,9 @@
     "ai.set.showThinkingHint": "Shows the reasoning some models return (collapsed, above the answer). It is only for you: it is never sent back to the model.",
     "ai.set.budget": "Extended thinking budget",
     "ai.set.budgetHint": "Anthropic only. Off, or at least 1024 tokens the model may spend thinking before it answers. More is slower and costs more. Other providers think on their own (reasoning models) or not at all.",
-    "ai.set.off": "Off"
+    "ai.set.off": "Off",
+    "ai.preparing": "Preparing an action",
+    "ai.set.stream": "Stream replies",
+    "ai.set.streamHint": "Shows the thinking and the answer while the model writes them. Turn it off for a server that cannot stream (MakDown also copes by itself when a server answers in one piece)."
   }
 }

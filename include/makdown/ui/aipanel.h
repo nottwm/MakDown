@@ -10,6 +10,7 @@
 #include <QList>
 #include <QWidget>
 #include <functional>
+#include <memory>
 #include <makdown/core/ai.h>
 #include <makdown/core/theme.h>
 
@@ -62,6 +63,7 @@ public:
 signals:
     void settingsRequested();                            // "Open AI settings" was clicked
     void turnFinished();                                 // the model is done (or failed / was stopped)
+    void contentUpdated();                               // streamed text or thinking was added to the view
 
 protected:
     bool eventFilter(QObject* o, QEvent* e) override;
@@ -75,6 +77,7 @@ private:
         QString plain;           // plain text of what is shown (transcriptText())
         QString status;          // tool: ok | error | denied
         bool expanded = false;   // thinking / tool: body open
+        bool touched = false;    // the user opened / closed it himself: do not auto-collapse
     };
 
     void callModel();
@@ -83,7 +86,14 @@ private:
     QString runShell(const QString& command, int timeoutMs, bool* timedOut, int* exitCode);
     bool confirm(const QString& what, const QString& detail, bool* sessionFlag, bool defaultAllow);
     QString askUser(const QString& question, const QStringList& options, bool* answered);
-    void addEntry(Entry::Kind k, const QString& text, const QString& title = QString(), const QString& status = QString());
+    int addEntry(Entry::Kind k, const QString& text, const QString& title = QString(), const QString& status = QString(), bool expanded = false);
+    void onData();                                       // streamed bytes arrived
+    void flushLive();                                    // show what the stream has so far (thinking card, answer)
+    void refreshItem(int index);                         // rebuild one item's widget
+    void removeLastEntry();
+    void setAssistantText(int index, const QString& markdown);
+    void setThinkingText(int index, const QString& text);
+    static QString wordsLabel(const QString& text);
     QWidget* makeItem(int index);                        // the widget for entries_[index]
     void rebuild();                                      // all widgets again (theme change)
     void applyStyle();                                   // the panel's style sheet, from the theme
@@ -107,6 +117,13 @@ private:
 
     QNetworkAccessManager* nam_ = nullptr;
     QNetworkReply* reply_ = nullptr;
+    // the reply being received
+    std::unique_ptr<Ai::StreamParser> parser_;
+    QByteArray rawBody_;
+    int httpStatus_ = 0;
+    bool liveStream_ = false, nonSse_ = false, sniffed_ = false, thinkCollapsed_ = false;
+    int liveThink_ = -1, liveAsst_ = -1;                 // entries filled while the reply streams in
+    QTimer* flush_ = nullptr;                            // coalesces updates (the Markdown is rendered again each time)
     QProcess* proc_ = nullptr;
 
     QWidget* status_ = nullptr;                          // provider / model line (click = Settings)

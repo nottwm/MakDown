@@ -54,6 +54,7 @@ struct Config {
     bool confirmFiles = true;                   // ask before the AI creates / overwrites files
     bool confirmCommands = true;                // ask before the AI runs a terminal command
     int  maxSteps = 25;                         // model calls per message (a tool loop stops here)
+    bool stream = true;                         // show thinking and answer while the model writes them (server-sent events)
     bool showThinking = true;                   // show the model's reasoning (collapsed) when the provider returns it
     int  thinkingBudget = 0;                    // Anthropic only: ask for extended thinking with this many tokens (0 = off, else >= 1024)
 
@@ -77,12 +78,44 @@ struct Request {
     QByteArray body;
     QString error;                                            // non-empty: the request cannot be made (no key, bad URL ...)
 };
-Request buildRequest(const Config& c, const QString& system, const QList<Message>& history);
+Request buildRequest(const Config& c, const QString& system, const QList<Message>& history, bool stream = false);
 
 struct Reply { bool ok = false; QString text; QString thinking; QString error; };   // thinking: reasoning blocks, <think> tags and reasoning_content, already split off `text`
 Reply parseReply(Api api, int httpStatus, const QByteArray& body);
 
 QString endpointUrl(const Provider& p, const QString& baseUrl);
+
+// ---- streaming ------------------------------------------------------------------------------------
+// Reads the server-sent events of a streamed reply (Anthropic or OpenAI format) chunk by chunk, however the network
+// cuts the bytes. Reasoning arrives as Anthropic thinking deltas, reasoning_content / reasoning fields, or inline
+// <think>...</think> text; all of it ends up in thinking, the rest in text.
+class StreamParser {
+public:
+    struct Delta {
+        QString text, thinking;
+        bool empty() const { return text.isEmpty() && thinking.isEmpty(); }
+    };
+    explicit StreamParser(Api api) : api_(api) {}
+    Delta feed(const QByteArray& chunk);
+    Delta finish();                                // the connection closed: handle a last unterminated line, flush held-back text
+    const QString& text() const { return text_; }              // the answer so far
+    const QString& thinking() const { return thinking_; }
+    const QString& error() const { return error_; }            // the server reported an error inside the stream
+    bool sawEvents() const { return saw_; }                    // false: the body was not an event stream (plain JSON?)
+    bool truncated() const { return truncated_; }              // stopped at the output limit
+    bool done() const { return done_; }
+private:
+    void handleLine(const QByteArray& line, Delta* d);
+    void addText(const QString& s, Delta* d, bool flush = false);
+    void addThinking(const QString& s, Delta* d);
+    Api api_;
+    QByteArray lineBuf_;
+    QString text_, thinking_, error_, tagBuf_;
+    bool saw_ = false, truncated_ = false, done_ = false, inThink_ = false;
+};
+// What to show of a half-written answer: complete tool blocks and a tool block still being written are hidden.
+QString streamPreview(const QString& text);
+bool streamInToolBlock(const QString& text);                   // the text ends inside an unfinished <makdown_tool> block
 
 // ---- system prompt --------------------------------------------------------------------------------
 struct PromptContext {

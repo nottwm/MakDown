@@ -1,6 +1,6 @@
 {
   "name": "Polski",
-  "revision": 4,
+  "revision": 5,
   "builtin": true,
   "plural": "polish",
   "strings": {
@@ -419,6 +419,9 @@
     "ai.set.showThinkingHint": "Pokazuje tok rozumowania zwracany przez niektóre modele (zwinięty, nad odpowiedzią). Tylko dla Ciebie: nigdy nie wraca do modelu.",
     "ai.set.budget": "Budżet rozszerzonego myślenia",
     "ai.set.budgetHint": "Tylko Anthropic. Wyłączony albo co najmniej 1024 tokeny, które model może przeznaczyć na myślenie przed odpowiedzią. Więcej to wolniej i drożej. Inni dostawcy myślą sami (modele rozumujące) albo wcale.",
-    "ai.set.off": "Wył."
+    "ai.set.off": "Wył.",
+    "ai.preparing": "Przygotowuję akcję",
+    "ai.set.stream": "Odpowiedzi strumieniowe",
+    "ai.set.streamHint": "Pokazuje rozumowanie i odpowiedź na bieżąco, gdy model je pisze. Wyłącz dla serwera bez strumieniowania (MakDown radzi sobie też sam, gdy serwer odpowiada w całości)."
   }
 }

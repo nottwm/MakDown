@@ -94,6 +94,9 @@ void loadConfig() {
     c.confirmFiles = o["confirmFiles"].toBool(c.confirmFiles);
     c.confirmCommands = o["confirmCommands"].toBool(c.confirmCommands);
     c.maxSteps = qBound(1, o["maxSteps"].toInt(c.maxSteps), 100);
+    c.showThinking = o["showThinking"].toBool(c.showThinking);
+    c.thinkingBudget = o["thinkingBudget"].toInt(c.thinkingBudget);
+    if (c.thinkingBudget != 0) c.thinkingBudget = qBound(1024, c.thinkingBudget, 64000);
     const QJsonObject provs = o["providers"].toObject();
     for (auto it = provs.begin(); it != provs.end(); ++it) {
         const QJsonObject po = it.value().toObject();
@@ -116,6 +119,8 @@ void saveConfig() {
     o["confirmFiles"] = c.confirmFiles;
     o["confirmCommands"] = c.confirmCommands;
     o["maxSteps"] = c.maxSteps;
+    o["showThinking"] = c.showThinking;
+    o["thinkingBudget"] = c.thinkingBudget;
     QJsonObject provs;
     for (auto it = c.per.begin(); it != c.per.end(); ++it) {
         QJsonObject po;
@@ -176,6 +181,10 @@ Request buildRequest(const Config& c, const QString& system, const QList<Message
     if (p->api == Api::Anthropic) {
         r.headers << qMakePair(QByteArray("x-api-key"), key.toUtf8()) << qMakePair(QByteArray("anthropic-version"), QByteArray("2023-06-01"));
         body["max_tokens"] = 8192;
+        if (c.thinkingBudget >= 1024) {                      // extended thinking: max_tokens must exceed the budget
+            body["thinking"] = QJsonObject{{"type", "enabled"}, {"budget_tokens", c.thinkingBudget}};
+            body["max_tokens"] = c.thinkingBudget + 8192;
+        }
         body["system"] = system;
         for (const Message& m : msgs) arr.append(QJsonObject{{"role", m.role}, {"content", m.content}});
     } else {
@@ -211,18 +220,40 @@ Reply parseReply(Api api, int status, const QByteArray& raw) {
     if (api == Api::Anthropic) {
         for (const QJsonValue& v : o["content"].toArray()) {
             const QJsonObject b = v.toObject();
-            if (b["type"].toString() == "text") r.text += b["text"].toString();
+            const QString type = b["type"].toString();
+            if (type == "text") r.text += b["text"].toString();
+            else if (type == "thinking") r.thinking += (r.thinking.isEmpty() ? "" : "\n\n") + b["thinking"].toString();
+            else if (type == "redacted_thinking") r.thinking += (r.thinking.isEmpty() ? "" : "\n\n") + QStringLiteral("(the provider hid this part of the reasoning)");
         }
         if (o["stop_reason"].toString() == "max_tokens") r.text += "\n\n[MakDown: the reply was cut off at the output limit]";
     } else {
         const QJsonArray choices = o["choices"].toArray();
         if (choices.isEmpty()) { r.error = o.contains("error") ? errorText() : "The reply has no choices."; return r; }
         const QJsonObject ch = choices.first().toObject();
-        const QJsonValue c = ch["message"].toObject()["content"];
+        const QJsonObject msg = ch["message"].toObject();
+        const QJsonValue c = msg["content"];
         if (c.isString()) r.text = c.toString();
         else for (const QJsonValue& v : c.toArray()) r.text += v.toObject()["text"].toString();
+        // reasoning comes under different names: DeepSeek / OpenCode "reasoning_content", OpenRouter "reasoning"
+        for (const char* k : {"reasoning_content", "reasoning"})
+            if (msg[k].isString() && !msg[k].toString().trimmed().isEmpty()) { r.thinking = msg[k].toString(); break; }
+        if (r.thinking.isEmpty())
+            for (const QJsonValue& d : msg["reasoning_details"].toArray()) {
+                const QString t = d.toObject()["text"].toString();
+                if (!t.isEmpty()) r.thinking += (r.thinking.isEmpty() ? "" : "\n\n") + t;
+            }
         if (ch["finish_reason"].toString() == "length") r.text += "\n\n[MakDown: the reply was cut off at the output limit]";
     }
+    // models that think inline: <think>...</think> (Qwen, DeepSeek R1 distills, ...) - move it out of the answer
+    static const QRegularExpression inlineThink("<(think|thinking)>(.*?)</\\1>", QRegularExpression::DotMatchesEverythingOption);
+    QRegularExpressionMatchIterator it = inlineThink.globalMatch(r.text);
+    while (it.hasNext()) {
+        const QString t = it.next().captured(2).trimmed();
+        if (!t.isEmpty()) r.thinking += (r.thinking.isEmpty() ? "" : "\n\n") + t;
+    }
+    r.text.remove(inlineThink);
+    r.text = r.text.trimmed();
+    r.thinking = r.thinking.trimmed();
     r.ok = true;
     return r;
 }

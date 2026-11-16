@@ -4,11 +4,15 @@
 #include <makdown/core/lang.h>
 #include <makdown/core/markdown.h>
 
+#include <QAbstractTextDocumentLayout>
 #include <QCheckBox>
 #include <QDialog>
 #include <QDir>
+#include <QElapsedTimer>
 #include <QEventLoop>
 #include <QFileInfo>
+#include <QFontMetrics>
+#include <QFrame>
 #include <QHBoxLayout>
 #include <QKeyEvent>
 #include <QLabel>
@@ -17,13 +21,16 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QPainter>
 #include <QPlainTextEdit>
 #include <QPointer>
 #include <QProcess>
 #include <QProcessEnvironment>
 #include <QPushButton>
 #include <QRegularExpression>
+#include <QScrollArea>
 #include <QScrollBar>
+#include <QStyle>
 #include <QSysInfo>
 #include <QTextBrowser>
 #include <QTextDocument>
@@ -32,7 +39,7 @@
 #include <QVBoxLayout>
 
 namespace {
-// The part of a rendered document that goes between <body> and </body>, so several can share one page.
+// The part of a rendered document that goes between <body> and </body>.
 QString bodyOf(const QString& html) {
     int a = html.indexOf("<body");
     if (a < 0) return html;
@@ -40,7 +47,57 @@ QString bodyOf(const QString& html) {
     const int b = html.lastIndexOf("</body>");
     return b > a ? html.mid(a, b - a) : html.mid(a);
 }
-QString plainHtml(const QString& s) { return s.toHtmlEscaped().replace('\n', "<br>"); }
+QString rgba(const QString& hex, double alpha) {
+    const QColor c(hex);
+    return QString("rgba(%1,%2,%3,%4)").arg(c.red()).arg(c.green()).arg(c.blue()).arg(alpha);
+}
+
+// A text browser as tall as its text (no scroll bars of its own): assistant messages live in the chat's scroll area.
+class FitBrowser : public QTextBrowser {
+public:
+    explicit FitBrowser(QWidget* p = nullptr) : QTextBrowser(p) {
+        setFrameShape(QFrame::NoFrame);
+        setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff); setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        setOpenLinks(false);
+        setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        document()->setDocumentMargin(0);
+        viewport()->setAutoFillBackground(false);
+        QObject::connect(document()->documentLayout(), &QAbstractTextDocumentLayout::documentSizeChanged, this, [this] { fit(); });
+    }
+protected:
+    void resizeEvent(QResizeEvent* e) override { QTextBrowser::resizeEvent(e); fit(); }
+    void wheelEvent(QWheelEvent* e) override { e->ignore(); }          // the chat scrolls, not the message
+private:
+    void fit() {
+        document()->setTextWidth(viewport()->width());
+        const int h = int(document()->size().height()) + 2;
+        if (h != height()) setFixedHeight(h);
+    }
+};
+
+// A frame that reports clicks (headers of the collapsible cards).
+class ClickFrame : public QFrame {
+public:
+    std::function<void()> onClick;
+protected:
+    void mouseReleaseEvent(QMouseEvent* e) override { QFrame::mouseReleaseEvent(e); if (e->button() == Qt::LeftButton && onClick) onClick(); }
+};
+
+// One line of text that elides with "..." instead of forcing the panel wider.
+class ElideLabel : public QLabel {
+public:
+    explicit ElideLabel(const QString& t = QString(), QWidget* p = nullptr) : QLabel(t, p) {
+        setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+    }
+    QSize minimumSizeHint() const override { return QSize(0, QLabel::minimumSizeHint().height()); }
+protected:
+    void paintEvent(QPaintEvent*) override {
+        QPainter p(this);
+        p.setPen(palette().color(foregroundRole()));
+        p.setFont(font());
+        p.drawText(rect(), int(alignment()) | Qt::AlignVCenter, fontMetrics().elidedText(text(), Qt::ElideRight, width()));
+    }
+};
 } // namespace
 
 AiPanel::AiPanel(QWidget* parent) : QWidget(parent) {
@@ -50,50 +107,94 @@ AiPanel::AiPanel(QWidget* parent) : QWidget(parent) {
 
     auto* v = new QVBoxLayout(this); v->setContentsMargins(0, 0, 0, 0); v->setSpacing(0);
 
-    // ---- header: title, provider / model, new conversation, settings
+    // ---- header: title + actions, then the provider / model line
     auto* head = new QWidget; head->setObjectName("aiHead");
-    auto* h = new QHBoxLayout(head); h->setContentsMargins(12, 8, 6, 6); h->setSpacing(2);
+    auto* hv = new QVBoxLayout(head); hv->setContentsMargins(14, 10, 8, 8); hv->setSpacing(0);
+    auto* h1 = new QHBoxLayout; h1->setSpacing(6);
+    auto* spark = new QLabel(QString::fromUtf8("\u2726")); spark->setObjectName("aiSpark");
     auto* titleLbl = new QLabel(L("ai.title")); titleLbl->setObjectName("aiTitle");
-    QFont tf = titleLbl->font(); tf.setBold(true); titleLbl->setFont(tf);
-    h->addWidget(titleLbl);
-    status_ = new QLabel; status_->setObjectName("hint"); status_->setTextInteractionFlags(Qt::NoTextInteraction);
-    h->addWidget(status_, 1);
-    newBtn_ = new QToolButton; newBtn_->setText(L("ai.newShort")); newBtn_->setToolTip(L("ai.newChat")); newBtn_->setAutoRaise(true);
-    setBtn_ = new QToolButton; setBtn_->setText(QString::fromUtf8("\u2699")); setBtn_->setToolTip(L("ai.settings")); setBtn_->setAutoRaise(true);
-    h->addWidget(newBtn_); h->addWidget(setBtn_);
+    newBtn_ = new QToolButton; newBtn_->setObjectName("aiHeadBtn"); newBtn_->setText(QString::fromUtf8("\uff0b ") + L("ai.newShort")); newBtn_->setToolTip(L("ai.newChat")); newBtn_->setAutoRaise(true);
+    setBtn_ = new QToolButton; setBtn_->setObjectName("aiHeadBtn"); setBtn_->setText(QString::fromUtf8("\u2699")); setBtn_->setToolTip(L("ai.settings")); setBtn_->setAutoRaise(true);
+    h1->addWidget(spark); h1->addWidget(titleLbl); h1->addStretch(1); h1->addWidget(newBtn_); h1->addWidget(setBtn_);
+    hv->addLayout(h1);
+    auto* st = new ClickFrame; st->setObjectName("aiStatus"); st->setCursor(Qt::PointingHandCursor); st->setToolTip(L("ai.statusTip"));
+    auto* sl = new QHBoxLayout(st); sl->setContentsMargins(20, 0, 0, 0); sl->setSpacing(0);
+    auto* statusLbl = new ElideLabel; statusLbl->setObjectName("aiStatusText");
+    sl->addWidget(statusLbl);
+    st->onClick = [this] { emit settingsRequested(); };
+    status_ = st;
+    hv->addWidget(st);
     v->addWidget(head);
 
     // ---- "no API key" banner
-    bannerBox_ = new QWidget; bannerBox_->setObjectName("aiBanner");
-    auto* bv = new QVBoxLayout(bannerBox_); bv->setContentsMargins(12, 6, 12, 8); bv->setSpacing(6);
-    banner_ = new QLabel; banner_->setWordWrap(true); banner_->setObjectName("hint");
+    bannerBox_ = new QWidget; bannerBox_->setObjectName("aiBannerBox");
+    auto* bb = new QVBoxLayout(bannerBox_); bb->setContentsMargins(12, 8, 12, 4);
+    auto* card = new QFrame; card->setObjectName("aiBanner");
+    auto* bv = new QVBoxLayout(card); bv->setContentsMargins(12, 10, 12, 10); bv->setSpacing(8);
+    banner_ = new QLabel; banner_->setWordWrap(true);
     bannerBtn_ = new QPushButton(L("ai.openSettings"));
     bv->addWidget(banner_); bv->addWidget(bannerBtn_, 0, Qt::AlignLeft);
+    bb->addWidget(card);
     v->addWidget(bannerBox_);
 
-    // ---- transcript
-    view_ = new QTextBrowser; view_->setObjectName("aiView"); view_->setOpenLinks(false); view_->setFrameShape(QFrame::NoFrame);
-    v->addWidget(view_, 1);
+    // ---- the conversation: a scroll area of items (+ the empty state)
+    scroll_ = new QScrollArea; scroll_->setObjectName("aiScroll"); scroll_->setWidgetResizable(true); scroll_->setFrameShape(QFrame::NoFrame);
+    scroll_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    auto* content = new QWidget; content->setObjectName("aiContent");
+    list_ = new QVBoxLayout(content); list_->setContentsMargins(12, 10, 12, 10); list_->setSpacing(10);
 
-    // ---- input
+    emptyBox_ = new QWidget; emptyBox_->setObjectName("aiEmpty");
+    auto* ev = new QVBoxLayout(emptyBox_); ev->setContentsMargins(8, 28, 8, 8); ev->setSpacing(10);
+    auto* bigSpark = new QLabel(QString::fromUtf8("\u2726")); bigSpark->setObjectName("aiBigSpark"); bigSpark->setAlignment(Qt::AlignCenter);
+    auto* emptyTxt = new QLabel(L("ai.empty")); emptyTxt->setObjectName("aiEmptyText"); emptyTxt->setWordWrap(true); emptyTxt->setAlignment(Qt::AlignCenter);
+    ev->addWidget(bigSpark); ev->addWidget(emptyTxt);
+    for (const char* key : {"ai.sug1", "ai.sug2", "ai.sug3"}) {
+        auto* chip = new QPushButton(L(key)); chip->setObjectName("aiChip"); chip->setCursor(Qt::PointingHandCursor);
+        connect(chip, &QPushButton::clicked, this, [this, chip] { input_->setPlainText(chip->text()); input_->setFocus(); input_->moveCursor(QTextCursor::End); });
+        ev->addWidget(chip);
+    }
+    list_->addWidget(emptyBox_);
+    list_->addStretch(1);
+    scroll_->setWidget(content);
+    v->addWidget(scroll_, 1);
+    connect(scroll_->verticalScrollBar(), &QScrollBar::rangeChanged, this, [this] { if (stick_) scrollDown(true); });
+    connect(scroll_->verticalScrollBar(), &QScrollBar::valueChanged, this, [this](int val) { stick_ = val >= scroll_->verticalScrollBar()->maximum() - 24; });
+
+    // ---- composer: a rounded box with the input and the send button
     auto* foot = new QWidget; foot->setObjectName("aiFoot");
-    auto* fv = new QVBoxLayout(foot); fv->setContentsMargins(10, 6, 10, 10); fv->setSpacing(6);
+    auto* fv = new QVBoxLayout(foot); fv->setContentsMargins(10, 4, 10, 10);
+    composer_ = new QFrame; composer_->setObjectName("aiComposer");
+    auto* cv = new QVBoxLayout(composer_); cv->setContentsMargins(10, 8, 8, 8); cv->setSpacing(4);
     input_ = new QPlainTextEdit; input_->setObjectName("aiInput"); input_->setPlaceholderText(L("ai.placeholder"));
-    input_->setMinimumHeight(64); input_->setMaximumHeight(120); input_->installEventFilter(this);
-    fv->addWidget(input_);
+    input_->setFrameShape(QFrame::NoFrame); input_->setMinimumHeight(42); input_->setMaximumHeight(140); input_->installEventFilter(this);
+    cv->addWidget(input_);
     auto* row = new QHBoxLayout; row->setSpacing(8);
-    includeDoc_ = new QCheckBox(L("ai.includeDoc")); includeDoc_->setToolTip(L("ai.includeDocTip")); includeDoc_->setChecked(true);
-    sendBtn_ = new QPushButton(L("ai.send")); sendBtn_->setObjectName("primary");
+    includeDoc_ = new QCheckBox(L("ai.includeDoc")); includeDoc_->setObjectName("aiInclude"); includeDoc_->setToolTip(L("ai.includeDocTip")); includeDoc_->setChecked(true);
+    sendBtn_ = new QPushButton(QString::fromUtf8("\u2191")); sendBtn_->setObjectName("aiSend"); sendBtn_->setToolTip(L("ai.sendTip")); sendBtn_->setCursor(Qt::PointingHandCursor);
+    sendBtn_->setFixedSize(30, 30);
     row->addWidget(includeDoc_, 1); row->addWidget(sendBtn_);
-    fv->addLayout(row);
+    cv->addLayout(row);
+    fv->addWidget(composer_);
     v->addWidget(foot);
+
+    // ---- the animated "Thinking..." row (created once, moved to the end of the list while a request is open)
+    pending_ = new QFrame; pending_->setObjectName("aiPending");
+    auto* pl = new QHBoxLayout(pending_); pl->setContentsMargins(10, 6, 10, 6);
+    pendingLbl_ = new QLabel; pendingLbl_->setObjectName("aiPendingText");
+    pl->addWidget(pendingLbl_);
+    pending_->hide();
+    dots_ = new QTimer(this); dots_->setInterval(380);
+    connect(dots_, &QTimer::timeout, this, [this] { dotStep_ = (dotStep_ + 1) % 4; pendingLbl_->setText(pendingBase_ + QString(dotStep_, '.')); });
 
     connect(sendBtn_, &QPushButton::clicked, this, [this] { if (busy_) stop(); else submit(); });
     connect(newBtn_, &QToolButton::clicked, this, [this] { newChat(); });
     connect(setBtn_, &QToolButton::clicked, this, [this] { emit settingsRequested(); });
     connect(bannerBtn_, &QPushButton::clicked, this, [this] { emit settingsRequested(); });
+    connect(input_, &QPlainTextEdit::textChanged, this, [this] { growInput(); });
+    applyStyle();
     refresh();
-    rebuild();
+    updateEmpty();
+    growInput();
 }
 
 AiPanel::~AiPanel() {
@@ -101,37 +202,96 @@ AiPanel::~AiPanel() {
     if (reply_) { reply_->disconnect(this); reply_->abort(); }
 }
 
+void AiPanel::growInput() {
+    const int h = int(input_->document()->size().height()) + 14;
+    input_->setFixedHeight(qBound(42, h, 140));
+}
+
 void AiPanel::applyTheme(const Theme& t) {
     theme_ = t;
-    view_->document()->setDefaultStyleSheet(previewCss(t));
-    view_->setFont(ThemeStore::makeFont(t.previewFont, t.previewSize));
-    rebuild(true);
+    applyStyle();
+    rebuild();
+}
+
+// The panel's look. Everything is drawn from the theme's colours, so it follows every preset.
+void AiPanel::applyStyle() {
+    const Theme& t = theme_;
+    const QString accent = t.color("accent"), accentFg = t.color("accentFg"), border = t.color("border"), panel = t.color("panel"),
+                  muted = t.color("muted"), fg = t.color("fg"), bg = t.color("bg"), codeBg = t.color("codeBg"), codeFg = t.color("codeFg");
+    const int r = qBound(4, t.radius, 14);
+    QString q;
+    auto add = [&q](const QString& s) { q += s + "\n"; };
+    add(QString("#aiPanel { background: %1; }").arg(bg));
+    add("#aiScroll, #aiContent, #aiEmpty { background: transparent; }");
+    add(QString("#aiHead { background: %1; border-bottom: 1px solid %2; }").arg(panel, border));
+    add(QString("#aiSpark { color: %1; font-size: 15px; }").arg(accent));
+    add(QString("#aiTitle { color: %1; font-weight: 600; }").arg(fg));
+    add(QString("#aiHeadBtn { color: %1; border: none; border-radius: %2px; padding: 3px 7px; }").arg(muted).arg(r));
+    add(QString("#aiHeadBtn:hover { background: %1; color: %2; }").arg(border, fg));
+    add(QString("#aiStatusText { color: %1; font-size: 11px; }").arg(muted));
+    add(QString("#aiStatus:hover #aiStatusText { color: %1; }").arg(accent));
+    add(QString("#aiBanner { background: %1; border: 1px solid %2; border-left: 3px solid %3; border-radius: %4px; }").arg(panel, border, accent).arg(r));
+    add(QString("#aiBanner QLabel { color: %1; }").arg(fg));
+    add(QString("#aiBigSpark { color: %1; font-size: 34px; }").arg(accent));
+    add(QString("#aiEmptyText { color: %1; }").arg(muted));
+    add(QString("#aiChip { background: %1; color: %2; border: 1px solid %3; border-radius: %4px; padding: 7px 12px; text-align: left; }").arg(panel, fg, border).arg(r + 4));
+    add(QString("#aiChip:hover { border-color: %1; color: %1; }").arg(accent));
+    // conversation items
+    add(QString("#aiUser { background: %1; border: 1px solid %2; border-radius: %3px; }").arg(rgba(accent, 0.13), rgba(accent, 0.35)).arg(r + 4));
+    add(QString("#aiUser QLabel { color: %1; background: transparent; }").arg(fg));
+    add(QString("#aiAsstName { color: %1; font-weight: 600; font-size: 11px; }").arg(accent));
+    add(QString("#aiThink, #aiTool { background: %1; border: 1px solid %2; border-radius: %3px; }").arg(panel, border).arg(r));
+    add(QString("#aiCardTitle { color: %1; font-size: 11px; }").arg(muted));
+    add(QString("#aiCardSub { color: %1; font-size: 11px; }").arg(muted));
+    add(QString("#aiChevron { color: %1; }").arg(muted));
+    add(QString("#aiThinkBody { color: %1; font-style: italic; background: transparent; padding: 0px 10px 8px 10px; }").arg(muted));
+    add(QString("#aiToolBody { color: %1; background: %2; border-top: 1px solid %3; border-bottom-left-radius: %4px; border-bottom-right-radius: %4px; padding: 8px 10px; }").arg(codeFg, codeBg, border).arg(r));
+    add(QString("#aiError { background: %1; border: 1px solid %2; border-radius: %3px; }").arg("rgba(209,36,47,0.12)", "rgba(209,36,47,0.55)").arg(r));
+    add(QString("#aiError QLabel { color: %1; }").arg(fg));
+    add(QString("#aiNotice { color: %1; font-style: italic; }").arg(muted));
+    add(QString("#aiPending { background: transparent; }"));
+    add(QString("#aiPendingText { color: %1; font-style: italic; }").arg(muted));
+    // composer
+    add(QString("#aiFoot { background: %1; }").arg(bg));
+    add(QString("#aiComposer { background: %1; border: 1px solid %2; border-radius: %3px; }").arg(t.color("editorBg"), border).arg(r + 4));
+    add(QString("#aiComposer[focus=\"true\"] { border: 1px solid %1; }").arg(accent));
+    add(QString("#aiInput { background: transparent; border: none; color: %1; selection-background-color: %2; }").arg(t.color("editorFg"), t.color("selection")));
+    add(QString("#aiInclude { color: %1; font-size: 11px; }").arg(muted));
+    add(QString("#aiSend { background: %1; color: %2; border: none; border-radius: 15px; font-size: 15px; font-weight: bold; padding: 0px; }").arg(accent, accentFg));
+    add(QString("#aiSend:hover { background: %1; }").arg(rgba(accent, 0.85)));
+    add(QString("#aiSend[stop=\"true\"] { background: %1; }").arg(muted));
+    setStyleSheet(q);
+    for (QFrame* f : findChildren<QFrame*>("aiComposer")) { f->style()->unpolish(f); f->style()->polish(f); }
 }
 
 void AiPanel::focusInput() { input_->setFocus(); }
 
 void AiPanel::setIncludeDocument(bool on) { includeDoc_->setChecked(on); }
 
-void AiPanel::refresh() { updateStatus(); }
-
-void AiPanel::updateStatus() {
+void AiPanel::refresh() {
     const Ai::Config& c = Ai::config();
     const Ai::Provider* p = Ai::findProvider(c.provider);
     const QString name = p ? p->name : c.provider;
     const QString model = c.model(c.provider);
-    status_->setText(model.isEmpty() ? name : name + " \u00b7 " + model);
-    status_->setToolTip(status_->text());
+    if (auto* l = status_->findChild<ElideLabel*>()) l->setText(model.isEmpty() ? name : name + " \u00b7 " + model);
     const bool noKey = p && !p->custom && c.key(p->id).isEmpty();
     bannerBox_->setVisible(noKey);
     banner_->setText(L("ai.noKey").arg(name));
 }
 
+void AiPanel::updateStatus() { if (!busy_) refresh(); }
+
 bool AiPanel::eventFilter(QObject* o, QEvent* e) {
-    if (o == input_ && e->type() == QEvent::KeyPress) {
-        auto* k = static_cast<QKeyEvent*>(e);
-        if ((k->key() == Qt::Key_Return || k->key() == Qt::Key_Enter) && !(k->modifiers() & Qt::ShiftModifier)) {
-            if (!busy_) submit();
-            return true;
+    if (o == input_) {
+        if (e->type() == QEvent::FocusIn || e->type() == QEvent::FocusOut) {            // the composer's border lights up while typing
+            composer_->setProperty("focus", e->type() == QEvent::FocusIn);
+            composer_->style()->unpolish(composer_); composer_->style()->polish(composer_);
+        } else if (e->type() == QEvent::KeyPress) {
+            auto* k = static_cast<QKeyEvent*>(e);
+            if ((k->key() == Qt::Key_Return || k->key() == Qt::Key_Enter) && !(k->modifiers() & Qt::ShiftModifier)) {
+                if (!busy_) submit();
+                return true;
+            }
         }
     }
     return QWidget::eventFilter(o, e);
@@ -145,56 +305,165 @@ void AiPanel::submit() {
 }
 
 // ---------------------------------------------------------------------------------------------
-// transcript
+// conversation items
 // ---------------------------------------------------------------------------------------------
-void AiPanel::addEntry(Entry::Kind k, const QString& text, const QString& title) {
-    entries_.append({k, title, text});
-    rebuild();
+int AiPanel::thinkingBlocks() const {
+    int n = 0;
+    for (const Entry& e : entries_) if (e.kind == Entry::Thinking) ++n;
+    return n;
 }
 
-void AiPanel::rebuild(bool keepScroll) {
-    QScrollBar* sb = view_->verticalScrollBar();
-    const int old = sb->value();
-    const QString accent = theme_.color("accent"), muted = theme_.color("muted");
-    QString html;
-    if (entries_.isEmpty()) html = "<p style='color:" + muted + "'>" + plainHtml(L("ai.empty")) + "</p>";
-    for (const Entry& e : entries_) {
-        switch (e.kind) {
-        case Entry::User:
-            html += "<p><b style='color:" + accent + "'>" + plainHtml(L("ai.you")) + "</b><br>" + plainHtml(e.text) + "</p>";
-            break;
-        case Entry::Assistant:
-            html += "<p><b style='color:" + accent + "'>" + plainHtml(L("ai.assistant")) + "</b></p>"
-                    + bodyOf(renderMarkdownToHtml(e.text, theme_, false, host_.workDir ? host_.workDir() : QString()));
-            break;
-        case Entry::Tool:
-            html += "<p style='color:" + muted + "'><b>\u2699 " + plainHtml(e.title) + "</b></p><pre>" + e.text.toHtmlEscaped() + "</pre>";
-            break;
-        case Entry::Notice:
-            html += "<p style='color:" + muted + "'><i>" + plainHtml(e.text) + "</i></p>";
-            break;
-        case Entry::Error:
-            html += "<p style='color:#d1242f'><b>" + plainHtml(L("ai.error")) + "</b> " + plainHtml(e.text) + "</p>";
-            break;
-        }
+void AiPanel::updateEmpty() { emptyBox_->setVisible(entries_.isEmpty() && !busy_); }
+
+void AiPanel::scrollDown(bool force) {
+    if (!force && !stick_) return;
+    QTimer::singleShot(0, this, [this] { scroll_->verticalScrollBar()->setValue(scroll_->verticalScrollBar()->maximum()); });
+}
+
+// A collapsible card: a clickable header (dot, title, sub text, chevron) and a body that opens on click.
+static QWidget* cardWith(const QString& objectName, const QString& title, const QString& sub, const QString& dotColor, QWidget* body,
+                         bool expanded, std::function<void(bool)> toggled) {
+    auto* card = new QFrame; card->setObjectName(objectName);
+    auto* v = new QVBoxLayout(card); v->setContentsMargins(0, 0, 0, 0); v->setSpacing(0);
+    auto* head = new ClickFrame; head->setCursor(Qt::PointingHandCursor); head->setProperty("aiToggle", true);   // (the tests click these)
+    auto* h = new QHBoxLayout(head); h->setContentsMargins(10, 7, 10, 7); h->setSpacing(7);
+    if (!dotColor.isEmpty()) { auto* dot = new QLabel(QString::fromUtf8("\u25cf")); dot->setStyleSheet("color:" + dotColor + "; background: transparent; font-size: 9px;"); h->addWidget(dot); }
+    auto* t = new ElideLabel(title); t->setObjectName("aiCardTitle");
+    h->addWidget(t, 1);
+    if (!sub.isEmpty()) { auto* s = new QLabel(sub); s->setObjectName("aiCardSub"); h->addWidget(s); }
+    auto* chev = new QLabel(expanded ? QString::fromUtf8("\u25be") : QString::fromUtf8("\u25b8")); chev->setObjectName("aiChevron"); h->addWidget(chev);
+    v->addWidget(head);
+    v->addWidget(body);
+    body->setVisible(expanded);
+    head->onClick = [body, chev, toggled] {
+        const bool on = !body->isVisible();
+        body->setVisible(on);
+        chev->setText(on ? QString::fromUtf8("\u25be") : QString::fromUtf8("\u25b8"));
+        toggled(on);
+    };
+    return card;
+}
+
+QWidget* AiPanel::makeItem(int index) {
+    const Entry& e = entries_.at(index);
+    const QString muted = theme_.color("muted");
+    auto remember = [this, index](bool on) { if (index < entries_.size()) entries_[index].expanded = on; };
+    switch (e.kind) {
+    case Entry::User: {
+        auto* f = new QFrame; f->setObjectName("aiUser");
+        auto* l = new QVBoxLayout(f); l->setContentsMargins(11, 8, 11, 8);
+        auto* t = new QLabel(e.text); t->setWordWrap(true); t->setTextFormat(Qt::PlainText); t->setTextInteractionFlags(Qt::TextSelectableByMouse);
+        l->addWidget(t);
+        auto* row = new QWidget; auto* rl = new QHBoxLayout(row); rl->setContentsMargins(24, 0, 0, 0); rl->addWidget(f);
+        return row;
     }
-    view_->setHtml(html);
-    if (keepScroll) sb->setValue(old); else sb->setValue(sb->maximum());
+    case Entry::Assistant: {
+        auto* w = new QWidget; auto* v = new QVBoxLayout(w); v->setContentsMargins(2, 0, 2, 0); v->setSpacing(4);
+        auto* name = new QLabel(L("ai.assistant")); name->setObjectName("aiAsstName");
+        auto* b = new FitBrowser;
+        b->document()->setDefaultStyleSheet(previewCss(theme_));
+        b->setFont(ThemeStore::makeFont(theme_.previewFont, theme_.previewSize));
+        b->setHtml(bodyOf(renderMarkdownToHtml(e.text, theme_, false, host_.workDir ? host_.workDir() : QString())));
+        v->addWidget(name); v->addWidget(b);
+        return w;
+    }
+    case Entry::Thinking: {
+        auto* body = new QLabel(e.text); body->setObjectName("aiThinkBody"); body->setWordWrap(true); body->setTextFormat(Qt::PlainText);
+        body->setTextInteractionFlags(Qt::TextSelectableByMouse);
+        return cardWith("aiThink", QString::fromUtf8("\u2726 ") + L("ai.thought"), e.title, QString(), body, e.expanded, remember);
+    }
+    case Entry::Tool: {
+        const QString dot = e.status == "ok" ? "#2da44e" : e.status == "denied" ? "#d29922" : "#d1242f";
+        auto* body = new QLabel(e.text); body->setObjectName("aiToolBody"); body->setWordWrap(true); body->setTextFormat(Qt::PlainText);
+        body->setTextInteractionFlags(Qt::TextSelectableByMouse);
+        body->setFont(ThemeStore::makeFont(theme_.codeFont, qMax(8, theme_.previewSize - 1), true));
+        return cardWith("aiTool", e.title, QString(), dot, body, e.expanded, remember);
+    }
+    case Entry::Notice: {
+        auto* l = new QLabel(e.text); l->setObjectName("aiNotice"); l->setWordWrap(true); l->setAlignment(Qt::AlignCenter);
+        return l;
+    }
+    case Entry::Error: {
+        auto* f = new QFrame; f->setObjectName("aiError");
+        auto* l = new QVBoxLayout(f); l->setContentsMargins(11, 8, 11, 8);
+        auto* t = new QLabel("<b>" + L("ai.error").toHtmlEscaped() + "</b> " + e.text.toHtmlEscaped()); t->setWordWrap(true); t->setTextFormat(Qt::RichText);
+        t->setTextInteractionFlags(Qt::TextSelectableByMouse);
+        l->addWidget(t);
+        return f;
+    }
+    }
+    return new QWidget;
 }
 
-QString AiPanel::transcriptText() const { return view_->toPlainText(); }
+void AiPanel::addEntry(Entry::Kind k, const QString& text, const QString& title, const QString& status) {
+    Entry e{k, title, text, QString(), status, false};
+    if (k == Entry::Assistant) {
+        QTextDocument d; d.setHtml(bodyOf(renderMarkdownToHtml(text, theme_, false, QString())));
+        e.plain = d.toPlainText().trimmed();
+    } else if (k == Entry::Error) e.plain = L("ai.error") + " " + text;
+    else if (k == Entry::Tool) e.plain = title + "\n" + text;
+    else if (k == Entry::Thinking) e.plain = L("ai.thought") + "\n" + text;
+    else e.plain = text;
+    entries_.append(e);
+    const bool wasPending = list_->indexOf(pending_) >= 0;
+    QWidget* w = makeItem(entries_.size() - 1);
+    list_->insertWidget(list_->count() - 1 - (wasPending ? 1 : 0), w);      // before the stretch (and the pending row)
+    items_.append(w);
+    updateEmpty();
+    if (k == Entry::User) stick_ = true;
+    scrollDown(false);
+}
+
+void AiPanel::rebuild() {
+    for (QWidget* w : items_) { list_->removeWidget(w); w->deleteLater(); }
+    items_.clear();
+    const bool wasPending = list_->indexOf(pending_) >= 0;
+    for (int i = 0; i < entries_.size(); ++i) {
+        QWidget* w = makeItem(i);
+        list_->insertWidget(list_->count() - 1 - (wasPending ? 1 : 0), w);
+        items_.append(w);
+    }
+    updateEmpty();
+}
+
+void AiPanel::showPending(const QString& text) {
+    pendingBase_ = text; dotStep_ = 0;
+    pendingLbl_->setText(text);
+    if (list_->indexOf(pending_) < 0) list_->insertWidget(list_->count() - 1, pending_);
+    pending_->show();
+    dots_->start();
+    updateEmpty();
+    scrollDown(false);
+}
+
+void AiPanel::hidePending() {
+    dots_->stop();
+    pending_->hide();
+    list_->removeWidget(pending_);
+}
+
+QString AiPanel::transcriptText() const {
+    QStringList parts;
+    for (const Entry& e : entries_) parts << (e.kind == Entry::User ? L("ai.you") + "\n" + e.text : e.plain);
+    return parts.join("\n\n");
+}
 
 void AiPanel::newChat() {
     if (busy_) stop();
-    entries_.clear(); history_.clear();
+    for (QWidget* w : items_) { list_->removeWidget(w); w->deleteLater(); }
+    items_.clear(); entries_.clear(); history_.clear();
     sessionFiles_ = sessionCommands_ = false;
-    rebuild();
+    updateEmpty();
 }
 
 void AiPanel::setBusy(bool on) {
     busy_ = on;
-    sendBtn_->setText(on ? L("ai.stop") : L("ai.send"));
-    if (on) status_->setText(L("ai.thinking")); else updateStatus();
+    sendBtn_->setText(on ? QString::fromUtf8("\u25a0") : QString::fromUtf8("\u2191"));
+    sendBtn_->setToolTip(on ? L("ai.stopTip") : L("ai.sendTip"));
+    sendBtn_->setProperty("stop", on);
+    sendBtn_->style()->unpolish(sendBtn_); sendBtn_->style()->polish(sendBtn_);
+    if (!on) hidePending();
+    updateEmpty();
 }
 
 void AiPanel::finish() {
@@ -232,6 +501,7 @@ void AiPanel::callModel() {
     const Ai::Config& cfg = Ai::config();
     if (steps_ >= cfg.maxSteps) { addEntry(Entry::Notice, L("ai.stepLimit").arg(cfg.maxSteps)); finish(); return; }
     ++steps_;
+    showPending(L("ai.thinking"));
 
     Ai::PromptContext pc;
     pc.workDir = host_.workDir ? host_.workDir() : QString();
@@ -256,6 +526,7 @@ void AiPanel::onReply(Ai::Api api) {
     QNetworkReply* r = reply_;
     reply_ = nullptr;
     r->deleteLater();
+    hidePending();
     if (cancelled_) { addEntry(Entry::Notice, L("ai.stopped")); finish(); return; }
 
     const int status = r->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
@@ -263,9 +534,16 @@ void AiPanel::onReply(Ai::Api api) {
     if (status == 0) { addEntry(Entry::Error, r->errorString()); finish(); return; }
     const Ai::Reply rep = Ai::parseReply(api, status, body);
     if (!rep.ok) { addEntry(Entry::Error, rep.error); finish(); return; }
-    if (rep.text.trimmed().isEmpty()) { addEntry(Entry::Notice, L("ai.emptyReply")); finish(); return; }
+    if (rep.text.trimmed().isEmpty()) {
+        if (Ai::config().showThinking && !rep.thinking.isEmpty()) addEntry(Entry::Thinking, rep.thinking, QString());
+        addEntry(Entry::Notice, L("ai.emptyReply")); finish(); return;
+    }
 
     history_.append({"assistant", rep.text});
+    if (Ai::config().showThinking && !rep.thinking.isEmpty()) {            // reasoning first, collapsed, above the answer
+        const int words = rep.thinking.split(QRegularExpression("\\s+"), Qt::SkipEmptyParts).size();
+        addEntry(Entry::Thinking, rep.thinking, Ln("ai.words", words));
+    }
     const Ai::Parsed parsed = Ai::parseToolCalls(rep.text);
     if (!parsed.text.isEmpty()) addEntry(Entry::Assistant, parsed.text);
     if (parsed.calls.isEmpty()) { finish(); return; }
@@ -289,7 +567,7 @@ QString AiPanel::runTool(const Ai::ToolCall& c, bool* endBatch) {
     const Ai::Config& cfg = Ai::config();
     const QString name = c.name;
     auto done = [&](const QString& status, const QString& body, const QString& title = QString()) {
-        addEntry(Entry::Tool, Ai::clip(body, 1500), title.isEmpty() ? name : title);
+        addEntry(Entry::Tool, Ai::clip(body, 1500), title.isEmpty() ? name : title, status);
         return Ai::toolResult(name, status, Ai::clip(body, 30000));
     };
     auto arg = [&](const char* k) { return c.args.value(QString::fromLatin1(k)); };
@@ -368,7 +646,9 @@ QString AiPanel::runTool(const Ai::ToolCall& c, bool* endBatch) {
         if (cfg.confirmCommands && !confirm(L("ai.confirm.run").arg(root, cmd), QString(), &sessionCommands_, false))
             return done("denied", "the user denied this action", name + " \u00b7 " + cmd);
         bool timedOut = false; int code = -1;
+        showPending(L("ai.running"));
         const QString out = runShell(cmd, 120000, &timedOut, &code);
+        hidePending();
         QString body = out.isEmpty() ? QString("(no output)") : out;
         if (cancelled_) body += "\n[stopped by the user]";
         else if (timedOut) body += "\n[timed out after 120 seconds and was stopped]";

@@ -1,6 +1,6 @@
 {
   "name": "English",
-  "revision": 2,
+  "revision": 4,
   "builtin": true,
   "plural": "one_other",
   "strings": {
@@ -364,14 +364,12 @@
     "ai.openSettings": "Open AI settings",
     "ai.includeDoc": "Send the open document",
     "ai.includeDocTip": "Attach the text of the file in the editor (and your selection) to each message",
-    "ai.send": "Send",
-    "ai.stop": "Stop",
     "ai.placeholder": "Ask the assistant...  Enter sends, Shift+Enter adds a line",
     "ai.empty": "Ask me to write, edit or organise your Markdown. I can create files, read your project, run commands and ask you questions. Nothing is sent until you press Send.",
     "ai.you": "You",
     "ai.assistant": "Assistant",
     "ai.error": "Error:",
-    "ai.thinking": "Thinking...",
+    "ai.thinking": "Thinking",
     "ai.stopped": "Stopped.",
     "ai.stepLimit": "Stopped after %1 steps in a row. Write \"continue\" to let it go on.",
     "ai.emptyReply": "The model sent an empty reply.",
@@ -405,6 +403,20 @@
     "ai.set.confirmFiles": "Ask before the AI creates or overwrites files",
     "ai.set.confirmCmd": "Ask before the AI runs terminal commands",
     "ai.set.confirmCmdHint": "Recommended. A command runs with your permissions in the working folder.",
-    "ai.set.maxSteps": "Most steps per message"
+    "ai.set.maxSteps": "Most steps per message",
+    "ai.thought": "Thinking",
+    "ai.words": ["%n word", "%n words"],
+    "ai.running": "Running the command",
+    "ai.sug1": "Summarize this document",
+    "ai.sug2": "Fix grammar and typos",
+    "ai.sug3": "Create a README for this folder",
+    "ai.statusTip": "Click to change provider, model or API key",
+    "ai.sendTip": "Send (Enter)",
+    "ai.stopTip": "Stop",
+    "ai.set.showThinking": "Show the model's thinking",
+    "ai.set.showThinkingHint": "Shows the reasoning some models return (collapsed, above the answer). It is only for you: it is never sent back to the model.",
+    "ai.set.budget": "Extended thinking budget",
+    "ai.set.budgetHint": "Anthropic only. Off, or at least 1024 tokens the model may spend thinking before it answers. More is slower and costs more. Other providers think on their own (reasoning models) or not at all.",
+    "ai.set.off": "Off"
   }
 }

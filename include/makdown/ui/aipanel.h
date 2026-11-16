@@ -14,6 +14,10 @@
 #include <makdown/core/theme.h>
 
 class QCheckBox;
+class QFrame;
+class QScrollArea;
+class QTimer;
+class QVBoxLayout;
 class QLabel;
 class QNetworkAccessManager;
 class QNetworkReply;
@@ -53,6 +57,7 @@ public:
     void stop();
     QString transcriptText() const;                      // plain text of the conversation (tests, debugging)
     int historySize() const { return history_.size(); }
+    int thinkingBlocks() const;                          // how many thinking blocks the conversation shows (tests)
 
 signals:
     void settingsRequested();                            // "Open AI settings" was clicked
@@ -62,7 +67,15 @@ protected:
     bool eventFilter(QObject* o, QEvent* e) override;
 
 private:
-    struct Entry { enum Kind { User, Assistant, Tool, Notice, Error } kind; QString title; QString text; };
+    // One line of the conversation as shown; the widgets are built from these (and rebuilt on a theme change).
+    struct Entry {
+        enum Kind { User, Assistant, Thinking, Tool, Notice, Error } kind;
+        QString title;           // tool: "create_file \u00b7 notes/a.md"
+        QString text;            // user: the text; assistant: Markdown; thinking / tool: plain text
+        QString plain;           // plain text of what is shown (transcriptText())
+        QString status;          // tool: ok | error | denied
+        bool expanded = false;   // thinking / tool: body open
+    };
 
     void callModel();
     void onReply(Ai::Api api);
@@ -70,8 +83,15 @@ private:
     QString runShell(const QString& command, int timeoutMs, bool* timedOut, int* exitCode);
     bool confirm(const QString& what, const QString& detail, bool* sessionFlag, bool defaultAllow);
     QString askUser(const QString& question, const QStringList& options, bool* answered);
-    void addEntry(Entry::Kind k, const QString& text, const QString& title = QString());
-    void rebuild(bool keepScroll = false);
+    void addEntry(Entry::Kind k, const QString& text, const QString& title = QString(), const QString& status = QString());
+    QWidget* makeItem(int index);                        // the widget for entries_[index]
+    void rebuild();                                      // all widgets again (theme change)
+    void applyStyle();                                   // the panel's style sheet, from the theme
+    void showPending(const QString& text);               // the animated "Thinking..." row
+    void hidePending();
+    void scrollDown(bool force);
+    void updateEmpty();
+    void growInput();
     void setBusy(bool on);
     void finish();
     void updateStatus();
@@ -89,11 +109,18 @@ private:
     QNetworkReply* reply_ = nullptr;
     QProcess* proc_ = nullptr;
 
-    QLabel *status_ = nullptr, *banner_ = nullptr;
+    QWidget* status_ = nullptr;                          // provider / model line (click = Settings)
+    QLabel* banner_ = nullptr;
     QPushButton *bannerBtn_ = nullptr, *sendBtn_ = nullptr;
     QToolButton *newBtn_ = nullptr, *setBtn_ = nullptr;
     QCheckBox* includeDoc_ = nullptr;
-    QTextBrowser* view_ = nullptr;
+    QScrollArea* scroll_ = nullptr;
+    QVBoxLayout* list_ = nullptr;                        // the items, with a stretch at the end
+    QList<QWidget*> items_;
+    QWidget* emptyBox_ = nullptr;
+    QFrame* composer_ = nullptr;
+    QFrame* pending_ = nullptr; QLabel* pendingLbl_ = nullptr; QTimer* dots_ = nullptr; QString pendingBase_; int dotStep_ = 0;
     QPlainTextEdit* input_ = nullptr;
     QWidget* bannerBox_ = nullptr;
+    bool stick_ = true;                                  // keep the view at the bottom while it grows
 };

@@ -28,6 +28,7 @@
 #include <QMessageBox>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QSignalBlocker>
 #include <QSlider>
 #include <QSpinBox>
 #include <QStackedWidget>
@@ -454,6 +455,14 @@ QWidget* SettingsDialog::buildAiPage() {
     Ai::Config& cfg = Ai::config();
     addCheck(bv, L("ai.set.confirmFiles"), QString(), &cfg.confirmFiles);
     addCheck(bv, L("ai.set.confirmCmd"), L("ai.set.confirmCmdHint"), &cfg.confirmCommands);
+    addCheck(bv, L("ai.set.showThinking"), L("ai.set.showThinkingHint"), &cfg.showThinking);
+    aiBudget_ = new QSpinBox; aiBudget_->setRange(0, 64000); aiBudget_->setSingleStep(1024); aiBudget_->setSpecialValueText(L("ai.set.off")); aiBudget_->setValue(cfg.thinkingBudget);
+    auto* bf = new QFormLayout; bf->addRow(L("ai.set.budget"), aiBudget_); bv->addLayout(bf);
+    auto* bh = new QLabel(L("ai.set.budgetHint")); bh->setObjectName("hint"); bh->setWordWrap(true); bv->addWidget(bh);
+    connect(aiBudget_, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int n) {
+        if (n > 0 && n < 1024) { n = 1024; QSignalBlocker b(aiBudget_); aiBudget_->setValue(n); }
+        Ai::config().thinkingBudget = n; Ai::saveConfig(); emit applied();
+    });
     for (QCheckBox* cb : aiBox_->findChildren<QCheckBox*>()) connect(cb, &QCheckBox::toggled, this, [] { Ai::saveConfig(); });
     auto* steps = new QSpinBox; steps->setRange(1, 100); steps->setValue(cfg.maxSteps);
     auto* sf = new QFormLayout; sf->addRow(L("ai.set.maxSteps"), steps); bv->addLayout(sf);
@@ -522,6 +531,7 @@ void SettingsDialog::loadAiProvider() {
     if (p) aiModel_->addItems(p->models);
     aiModel_->setEditText(c.model(c.provider));
     aiModel_->lineEdit()->setPlaceholderText(p && p->custom ? L("ai.set.modelCustom") : QString());
+    if (aiBudget_) aiBudget_->setEnabled(p && p->api == Ai::Api::Anthropic);       // only Anthropic takes a thinking budget
     if (aiPrompt_->toPlainText() != c.customPrompt) aiPrompt_->setPlainText(c.customPrompt);
     loading_ = was;
 }

@@ -53,6 +53,7 @@
 #include <QListWidget>
 #include <QPushButton>
 #include <QToolButton>
+#include <QTest>
 #include <QSysInfo>
 #include <QStackedWidget>
 #include <makdown/ui/synhl.h>
@@ -442,6 +443,7 @@ static QJsonObject handle(const QJsonObject& q) {
         c.provider = cfg["provider"].toString();
         Ai::ProviderSettings ps; ps.apiKey = cfg["key"].toString(); ps.model = cfg["model"].toString(); ps.baseUrl = cfg["baseUrl"].toString();
         c.per[c.provider] = ps;
+        c.thinkingBudget = cfg["thinkingBudget"].toInt();
         QList<Ai::Message> h;
         for (const QJsonValue& v : q["history"].toArray()) h.append({v.toObject()["role"].toString(), v.toObject()["content"].toString()});
         const Ai::Request rq = Ai::buildRequest(c, q["system"].toString("SYS"), h);
@@ -450,7 +452,7 @@ static QJsonObject handle(const QJsonObject& q) {
         r["body"] = QJsonDocument::fromJson(rq.body).object();
     } else if (cmd == "ai_reply") {
         const Ai::Reply rp = Ai::parseReply(q["api"].toString() == "anthropic" ? Ai::Api::Anthropic : Ai::Api::OpenAI, q["status"].toInt(200), q["body"].toString().toUtf8());
-        r["ok"] = true; r["parsedOk"] = rp.ok; r["text"] = rp.text; r["error"] = rp.error;
+        r["ok"] = true; r["parsedOk"] = rp.ok; r["text"] = rp.text; r["thinking"] = rp.thinking; r["error"] = rp.error;
     } else if (cmd == "ai_prompt") {
         Ai::PromptContext pc; pc.workDir = q["workDir"].toString(); pc.openFile = q["openFile"].toString(); pc.custom = q["custom"].toString();
         pc.os = "TestOS"; pc.shell = "/bin/sh";
@@ -471,10 +473,11 @@ static QJsonObject handle(const QJsonObject& q) {
         c.provider = q["provider"].toString("openai"); c.customPrompt = q["prompt"].toString();
         c.per[c.provider].apiKey = q["key"].toString(); c.per[c.provider].model = q["model"].toString();
         c.confirmCommands = q["confirmCommands"].toBool(true); c.maxSteps = q["maxSteps"].toInt(25);
+        c.showThinking = q["showThinking"].toBool(true); c.thinkingBudget = q["thinkingBudget"].toInt(0);
         Ai::saveConfig();
         c = Ai::Config(); Ai::loadConfig();
         r["provider"] = c.provider; r["prompt"] = c.customPrompt; r["key"] = c.per[c.provider].apiKey; r["model"] = c.model(c.provider);
-        r["confirmCommands"] = c.confirmCommands; r["maxSteps"] = c.maxSteps; r["path"] = Ai::configPath();
+        r["confirmCommands"] = c.confirmCommands; r["maxSteps"] = c.maxSteps; r["showThinking"] = c.showThinking; r["thinkingBudget"] = c.thinkingBudget; r["path"] = Ai::configPath();
     } else if (cmd == "ai_chat") {                    // a real AiPanel talking to a (mock) server; one send() per entry of "messages"
         Ai::Config& c = Ai::config();
         c = Ai::Config();
@@ -484,6 +487,7 @@ static QJsonObject handle(const QJsonObject& q) {
         c.customPrompt = cfg["customPrompt"].toString();
         c.confirmFiles = cfg["confirmFiles"].toBool(false); c.confirmCommands = cfg["confirmCommands"].toBool(false);
         c.maxSteps = cfg["maxSteps"].toInt(25);
+        c.showThinking = cfg["showThinking"].toBool(true); c.thinkingBudget = cfg["thinkingBudget"].toInt();
         g_clickButton = q["click"].toString(); g_fillText = q["fill"].toString();
         const QString root = q["root"].toString();
         QString hostFile = q["openFile"].toString(), hostText = q["openText"].toString();
@@ -513,6 +517,16 @@ static QJsonObject handle(const QJsonObject& q) {
         }
         g_clickButton.clear(); g_fillText.clear();
         r["transcript"] = panel.transcriptText(); r["history"] = panel.historySize(); r["busy"] = panel.busy(); r["finished"] = finishedAll;
+        r["thinkingBlocks"] = panel.thinkingBlocks();
+        if (q["expandAll"].toBool()) {                  // click every collapsible card header, like a user would
+            int clicked = 0;
+            for (QFrame* f : panel.findChildren<QFrame*>()) if (f->property("aiToggle").toBool()) { QTest::mouseClick(f, Qt::LeftButton); ++clicked; }
+            r["clicked"] = clicked;
+            QElapsedTimer t; t.start(); while (t.elapsed() < 200) QCoreApplication::processEvents();
+        }
+        if (q.contains("save")) panel.grab().save(q["save"].toString());
+        QStringList visible; for (QLabel* l : panel.findChildren<QLabel*>()) if (l->isVisibleTo(&panel) && !l->text().isEmpty()) visible << l->text();
+        r["visibleLabels"] = arr(visible);
         r["opened"] = arr(opened); r["newDocs"] = arr(newDocs); r["editorText"] = hostText;
     } else if (cmd == "win_ai") {                     // what the open window shows for the AI
         if (!g_win) { r["ok"] = false; r["error"] = "no window"; }

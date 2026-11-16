@@ -54,6 +54,8 @@ struct Config {
     bool confirmFiles = true;                   // ask before the AI creates / overwrites files
     bool confirmCommands = true;                // ask before the AI runs a terminal command
     int  maxSteps = 25;                         // model calls per message (a tool loop stops here)
+    bool showThinking = true;                   // show the model's reasoning (collapsed) when the provider returns it
+    int  thinkingBudget = 0;                    // Anthropic only: ask for extended thinking with this many tokens (0 = off, else >= 1024)
 
     ProviderSettings& cur() { return per[provider]; }
     QString key(const QString& id) const;       // stored key, else the environment variable, else empty
@@ -77,7 +79,7 @@ struct Request {
 };
 Request buildRequest(const Config& c, const QString& system, const QList<Message>& history);
 
-struct Reply { bool ok = false; QString text; QString error; };
+struct Reply { bool ok = false; QString text; QString thinking; QString error; };   // thinking: reasoning blocks, <think> tags and reasoning_content, already split off `text`
 Reply parseReply(Api api, int httpStatus, const QByteArray& body);
 
 QString endpointUrl(const Provider& p, const QString& baseUrl);

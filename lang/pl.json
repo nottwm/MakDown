@@ -1,6 +1,6 @@
 {
   "name": "Polski",
-  "revision": 2,
+  "revision": 4,
   "builtin": true,
   "plural": "polish",
   "strings": {
@@ -366,14 +366,12 @@
     "ai.openSettings": "Otwórz ustawienia SI",
     "ai.includeDoc": "Wysyłaj otwarty dokument",
     "ai.includeDocTip": "Dołączaj do każdej wiadomości tekst pliku z edytora (oraz zaznaczenie)",
-    "ai.send": "Wyślij",
-    "ai.stop": "Przerwij",
     "ai.placeholder": "Zapytaj asystenta...  Enter wysyła, Shift+Enter dodaje wiersz",
     "ai.empty": "Poproś mnie o napisanie, poprawienie lub uporządkowanie Twojego Markdowna. Potrafię tworzyć pliki, czytać projekt, uruchamiać polecenia i zadawać Ci pytania. Nic nie jest wysyłane, dopóki nie naciśniesz „Wyślij”.",
     "ai.you": "Ty",
     "ai.assistant": "Asystent",
     "ai.error": "Błąd:",
-    "ai.thinking": "Myślę...",
+    "ai.thinking": "Myślę",
     "ai.stopped": "Zatrzymano.",
     "ai.stepLimit": "Zatrzymano po %1 krokach z rzędu. Napisz „kontynuuj”, aby działał dalej.",
     "ai.emptyReply": "Model przysłał pustą odpowiedź.",
@@ -407,6 +405,20 @@
     "ai.set.confirmFiles": "Pytaj, zanim AI utworzy lub nadpisze pliki",
     "ai.set.confirmCmd": "Pytaj, zanim AI uruchomi polecenia terminala",
     "ai.set.confirmCmdHint": "Zalecane. Polecenie działa z Twoimi uprawnieniami w folderze roboczym.",
-    "ai.set.maxSteps": "Maks. kroków na wiadomość"
+    "ai.set.maxSteps": "Maks. kroków na wiadomość",
+    "ai.thought": "Rozumowanie",
+    "ai.words": ["%n słowo", "%n słowa", "%n słów"],
+    "ai.running": "Uruchamiam polecenie",
+    "ai.sug1": "Streść ten dokument",
+    "ai.sug2": "Popraw gramatykę i literówki",
+    "ai.sug3": "Utwórz README dla tego folderu",
+    "ai.statusTip": "Kliknij, aby zmienić dostawcę, model lub klucz API",
+    "ai.sendTip": "Wyślij (Enter)",
+    "ai.stopTip": "Przerwij",
+    "ai.set.showThinking": "Pokazuj rozumowanie modelu",
+    "ai.set.showThinkingHint": "Pokazuje tok rozumowania zwracany przez niektóre modele (zwinięty, nad odpowiedzią). Tylko dla Ciebie: nigdy nie wraca do modelu.",
+    "ai.set.budget": "Budżet rozszerzonego myślenia",
+    "ai.set.budgetHint": "Tylko Anthropic. Wyłączony albo co najmniej 1024 tokeny, które model może przeznaczyć na myślenie przed odpowiedzią. Więcej to wolniej i drożej. Inni dostawcy myślą sami (modele rozumujące) albo wcale.",
+    "ai.set.off": "Wył."
   }
 }

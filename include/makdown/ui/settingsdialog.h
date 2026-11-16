@@ -62,5 +62,6 @@ private:
     QComboBox *aiProvider_ = nullptr, *aiModel_ = nullptr;
     QLineEdit *aiBase_ = nullptr, *aiKey_ = nullptr;
     QLabel* aiKeyHint_ = nullptr;
+    QSpinBox* aiBudget_ = nullptr;
     QPlainTextEdit* aiPrompt_ = nullptr;
 };

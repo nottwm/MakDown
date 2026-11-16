@@ -5,7 +5,7 @@
 
 static const char* const kLangen = R"JSON({
   "name": "English",
-  "revision": 2,
+  "revision": 4,
   "builtin": true,
   "plural": "one_other",
   "strings": {
@@ -369,14 +369,12 @@ static const char* const kLangen = R"JSON({
     "ai.openSettings": "Open AI settings",
     "ai.includeDoc": "Send the open document",
     "ai.includeDocTip": "Attach the text of the file in the editor (and your selection) to each message",
-    "ai.send": "Send",
-    "ai.stop": "Stop",
     "ai.placeholder": "Ask the assistant...  Enter sends, Shift+Enter adds a line",
     "ai.empty": "Ask me to write, edit or organise your Markdown. I can create files, read your project, run commands and ask you questions. Nothing is sent until you press Send.",
     "ai.you": "You",
     "ai.assistant": "Assistant",
     "ai.error": "Error:",
-    "ai.thinking": "Thinking...",
+    "ai.thinking": "Thinking",
     "ai.stopped": "Stopped.",
     "ai.stepLimit": "Stopped after %1 steps in a row. Write \"continue\" to let it go on.",
     "ai.emptyReply": "The model sent an empty reply.",
@@ -410,14 +408,28 @@ static const char* const kLangen = R"JSON({
     "ai.set.confirmFiles": "Ask before the AI creates or overwrites files",
     "ai.set.confirmCmd": "Ask before the AI runs terminal commands",
     "ai.set.confirmCmdHint": "Recommended. A command runs with your permissions in the working folder.",
-    "ai.set.maxSteps": "Most steps per message"
+    "ai.set.maxSteps": "Most steps per message",
+    "ai.thought": "Thinking",
+    "ai.words": ["%n word", "%n words"],
+    "ai.running": "Running the command",
+    "ai.sug1": "Summarize this document",
+    "ai.sug2": "Fix grammar and typos",
+    "ai.sug3": "Create a README for this folder",
+    "ai.statusTip": "Click to change provider, model or API key",
+    "ai.sendTip": "Send (Enter)",
+    "ai.stopTip": "Stop",
+    "ai.set.showThinking": "Show the model's thinking",
+    "ai.set.showThinkingHint": "Shows the reasoning some models return (collapsed, above the answer). It is only for you: it is never sent back to the model.",
+    "ai.set.budget": "Extended thinking budget",
+    "ai.set.budgetHint": "Anthropic only. Off, or at least 1024 tokens the model may spend thinking before it answers. More is slower and costs more. Other providers think on their own (reasoning models) or not at all.",
+    "ai.set.off": "Off"
   }
 }
 )JSON";
 
 static const char* const kLangpl = R"JSON({
   "name": "Polski",
-  "revision": 2,
+  "revision": 4,
   "builtin": true,
   "plural": "polish",
   "strings": {
@@ -783,14 +795,12 @@ static const char* const kLangpl = R"JSON({
     "ai.openSettings": "Otwórz ustawienia SI",
     "ai.includeDoc": "Wysyłaj otwarty dokument",
     "ai.includeDocTip": "Dołączaj do każdej wiadomości tekst pliku z edytora (oraz zaznaczenie)",
-    "ai.send": "Wyślij",
-    "ai.stop": "Przerwij",
     "ai.placeholder": "Zapytaj asystenta...  Enter wysyła, Shift+Enter dodaje wiersz",
     "ai.empty": "Poproś mnie o napisanie, poprawienie lub uporządkowanie Twojego Markdowna. Potrafię tworzyć pliki, czytać projekt, uruchamiać polecenia i zadawać Ci pytania. Nic nie jest wysyłane, dopóki nie naciśniesz „Wyślij”.",
     "ai.you": "Ty",
     "ai.assistant": "Asystent",
     "ai.error": "Błąd:",
-    "ai.thinking": "Myślę...",
+    "ai.thinking": "Myślę",
     "ai.stopped": "Zatrzymano.",
     "ai.stepLimit": "Zatrzymano po %1 krokach z rzędu. Napisz „kontynuuj”, aby działał dalej.",
     "ai.emptyReply": "Model przysłał pustą odpowiedź.",
@@ -824,14 +834,28 @@ static const char* const kLangpl = R"JSON({
     "ai.set.confirmFiles": "Pytaj, zanim AI utworzy lub nadpisze pliki",
     "ai.set.confirmCmd": "Pytaj, zanim AI uruchomi polecenia terminala",
     "ai.set.confirmCmdHint": "Zalecane. Polecenie działa z Twoimi uprawnieniami w folderze roboczym.",
-    "ai.set.maxSteps": "Maks. kroków na wiadomość"
+    "ai.set.maxSteps": "Maks. kroków na wiadomość",
+    "ai.thought": "Rozumowanie",
+    "ai.words": ["%n słowo", "%n słowa", "%n słów"],
+    "ai.running": "Uruchamiam polecenie",
+    "ai.sug1": "Streść ten dokument",
+    "ai.sug2": "Popraw gramatykę i literówki",
+    "ai.sug3": "Utwórz README dla tego folderu",
+    "ai.statusTip": "Kliknij, aby zmienić dostawcę, model lub klucz API",
+    "ai.sendTip": "Wyślij (Enter)",
+    "ai.stopTip": "Przerwij",
+    "ai.set.showThinking": "Pokazuj rozumowanie modelu",
+    "ai.set.showThinkingHint": "Pokazuje tok rozumowania zwracany przez niektóre modele (zwinięty, nad odpowiedzią). Tylko dla Ciebie: nigdy nie wraca do modelu.",
+    "ai.set.budget": "Budżet rozszerzonego myślenia",
+    "ai.set.budgetHint": "Tylko Anthropic. Wyłączony albo co najmniej 1024 tokeny, które model może przeznaczyć na myślenie przed odpowiedzią. Więcej to wolniej i drożej. Inni dostawcy myślą sami (modele rozumujące) albo wcale.",
+    "ai.set.off": "Wył."
   }
 }
 )JSON";
 
 static const char* const kLangru = R"JSON({
   "name": "Русский",
-  "revision": 2,
+  "revision": 4,
   "builtin": true,
   "plural": "east_slavic",
   "strings": {
@@ -1197,14 +1221,12 @@ static const char* const kLangru = R"JSON({
     "ai.openSettings": "Открыть настройки ИИ",
     "ai.includeDoc": "Отправлять открытый документ",
     "ai.includeDocTip": "Прикладывать к каждому сообщению текст файла из редактора (и ваше выделение)",
-    "ai.send": "Отправить",
-    "ai.stop": "Стоп",
     "ai.placeholder": "Спросите ассистента...  Enter отправляет, Shift+Enter - новая строка",
     "ai.empty": "Попросите меня написать, поправить или упорядочить ваш Markdown. Я могу создавать файлы, читать проект, запускать команды и задавать вам вопросы. Ничего не отправляется, пока вы не нажмёте «Отправить».",
     "ai.you": "Вы",
     "ai.assistant": "Ассистент",
     "ai.error": "Ошибка:",
-    "ai.thinking": "Думаю...",
+    "ai.thinking": "Думаю",
     "ai.stopped": "Остановлено.",
     "ai.stepLimit": "Остановлено после %1 шагов подряд. Напишите «продолжай», чтобы продолжить.",
     "ai.emptyReply": "Модель прислала пустой ответ.",
@@ -1238,7 +1260,21 @@ static const char* const kLangru = R"JSON({
     "ai.set.confirmFiles": "Спрашивать, прежде чем AI создаст или перезапишет файлы",
     "ai.set.confirmCmd": "Спрашивать, прежде чем AI выполнит команды терминала",
     "ai.set.confirmCmdHint": "Рекомендуется. Команда выполняется с вашими правами в рабочей папке.",
-    "ai.set.maxSteps": "Максимум шагов на сообщение"
+    "ai.set.maxSteps": "Максимум шагов на сообщение",
+    "ai.thought": "Размышления",
+    "ai.words": ["%n слово", "%n слова", "%n слов"],
+    "ai.running": "Выполняю команду",
+    "ai.sug1": "Кратко перескажи этот документ",
+    "ai.sug2": "Исправь грамматику и опечатки",
+    "ai.sug3": "Создай README для этой папки",
+    "ai.statusTip": "Нажмите, чтобы сменить провайдера, модель или ключ API",
+    "ai.sendTip": "Отправить (Enter)",
+    "ai.stopTip": "Стоп",
+    "ai.set.showThinking": "Показывать размышления модели",
+    "ai.set.showThinkingHint": "Показывает рассуждения, которые возвращают некоторые модели (свёрнуто, над ответом). Только для вас: модели они не отправляются.",
+    "ai.set.budget": "Бюджет расширенного мышления",
+    "ai.set.budgetHint": "Только Anthropic. Выключено либо не менее 1024 токенов, которые модель может потратить на размышления перед ответом. Больше - медленнее и дороже. Остальные провайдеры думают сами (модели-рассуждатели) или не думают вовсе.",
+    "ai.set.off": "Выкл."
   }
 }
 )JSON";

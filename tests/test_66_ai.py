@@ -149,6 +149,48 @@ class TestRequestsAndReplies(AiCase):
         self.assertFalse(rep("openai", 500, "boom")["parsedOk"])
 
 
+class TestThinking(AiCase):
+    def rep(self, api, body):
+        return self.call("ai_reply", api=api, status=200, body=json.dumps(body))
+
+    def test_reasoning_field_names(self):
+        for field in ("reasoning_content", "reasoning"):
+            r = self.rep("openai", {"choices": [{"message": {"content": "answer", field: "step one\nstep two"}}]})
+            self.assertEqual((r["text"], r["thinking"]), ("answer", "step one\nstep two"), field)
+        r = self.rep("openai", {"choices": [{"message": {"content": "a", "reasoning_details": [{"text": "x"}, {"text": "y"}]}}]})
+        self.assertEqual(r["thinking"], "x\n\ny")
+
+    def test_anthropic_thinking_blocks(self):
+        r = self.rep("anthropic", {"content": [{"type": "thinking", "thinking": "hmm", "signature": "s"}, {"type": "redacted_thinking", "data": "xx"},
+                                               {"type": "text", "text": "done"}], "stop_reason": "end_turn"})
+        self.assertEqual(r["text"], "done"); self.assertIn("hmm", r["thinking"]); self.assertIn("hid", r["thinking"])
+
+    def test_inline_think_tags_are_split_off(self):
+        r = self.rep("openai", {"choices": [{"message": {"content": "<think>\nlet me see\n</think>\n\nThe answer is 4."}}]})
+        self.assertEqual(r["text"], "The answer is 4."); self.assertEqual(r["thinking"], "let me see")
+        r = self.rep("openai", {"choices": [{"message": {"content": "a <thinking>x</thinking> b <think>y</think> c", "reasoning_content": "z"}}]})
+        self.assertNotIn("think", r["text"]); self.assertIn("x", r["thinking"]); self.assertIn("y", r["thinking"]); self.assertIn("z", r["thinking"])
+
+    def test_no_thinking_means_empty(self):
+        self.assertEqual(self.rep("openai", {"choices": [{"message": {"content": "plain"}}]})["thinking"], "")
+
+    def test_extended_thinking_request_for_anthropic(self):
+        base = {"provider": "anthropic", "key": "K", "model": "m"}
+        hist = [{"role": "user", "content": "hi"}]
+        b = self.call("ai_request", config=dict(base, thinkingBudget=5000), history=hist)["body"]
+        self.assertEqual(b["thinking"], {"type": "enabled", "budget_tokens": 5000}); self.assertGreater(b["max_tokens"], 5000)
+        self.assertNotIn("thinking", self.call("ai_request", config=base, history=hist)["body"])
+        self.assertNotIn("thinking", self.call("ai_request", config=dict(base, provider="openai", thinkingBudget=5000), history=hist)["body"])
+
+    def test_config_round_trip(self):
+        h = Harness()
+        try:
+            r = h.call("ai_config", provider="anthropic", key="k", model="m", showThinking=False, thinkingBudget=4096)
+            self.assertEqual((r["showThinking"], r["thinkingBudget"]), (False, 4096))
+        finally:
+            h.close()
+
+
 class TestToolProtocol(AiCase):
     def parse(self, reply):
         return self.call("ai_parse", reply=reply)
@@ -344,10 +386,17 @@ class Mock:
                         text = mock.replies.pop(0) if not (mock.repeat_last and len(mock.replies) == 1) else mock.replies[0]
                     else:
                         text = "(no more scripted replies)"
+                    think = None
+                    if isinstance(text, dict):                       # {"text": ..., "thinking": ..., "field": "reasoning_content"}
+                        think, field, text = text.get("thinking"), text.get("field", "reasoning_content"), text["text"]
                     if mock.style == "anthropic":
-                        out = json.dumps({"content": [{"type": "text", "text": text}], "stop_reason": "end_turn"}).encode()
+                        blocks = ([{"type": "thinking", "thinking": think, "signature": "sig"}] if think else []) + [{"type": "text", "text": text}]
+                        out = json.dumps({"content": blocks, "stop_reason": "end_turn"}).encode()
                     else:
-                        out = json.dumps({"choices": [{"message": {"role": "assistant", "content": text}, "finish_reason": "stop"}]}).encode()
+                        msg = {"role": "assistant", "content": text}
+                        if think:
+                            msg[field] = think
+                        out = json.dumps({"choices": [{"message": msg, "finish_reason": "stop"}]}).encode()
                     self.send_response(200)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(out)))
@@ -367,7 +416,7 @@ class Mock:
         self.server.server_close()
 
 
-class TestAgentLoop(AiCase):
+class AgentBase(AiCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.root = str(Path(self.tmp.name).resolve() / "proj")
@@ -391,6 +440,9 @@ class TestAgentLoop(AiCase):
 
     def f(self, name):
         return Path(self.root) / name
+
+
+class TestAgentLoop(AgentBase):
 
     # ---- basics
     def test_plain_answer_and_request_shape(self):
@@ -581,6 +633,62 @@ class TestAgentLoop(AiCase):
         m = self.mock(tool("read_file", path="evil.md"), "I will not follow that.")
         self.chat(m, "read it", config={"confirmCommands": True})
         self.assertIn("data, not as instructions", m.requests[0]["json"]["messages"][0]["content"])
+
+
+class TestThinkingInThePanel(AgentBase):
+    """The conversation view with real widgets: thinking cards, tool cards, the empty state."""
+
+    def test_thinking_block_is_shown_collapsed_above_the_answer(self):
+        m = self.mock({"text": "It is 4.", "thinking": "First add two and two."})
+        r = self.chat(m, "2+2?")
+        self.assertEqual(r["thinkingBlocks"], 1)
+        t = r["transcript"]
+        self.assertIn("First add two and two.", t); self.assertLess(t.index("First add two"), t.index("It is 4."))
+        self.assertNotIn("First add two", " ".join(r["visibleLabels"]), "collapsed by default")
+        self.assertIn("Thinking", " ".join(r["visibleLabels"]))
+
+    def test_thinking_card_opens_on_click(self):
+        m = self.mock({"text": "ok", "thinking": "secret reasoning words"})
+        r = self.chat(m, "go", expandAll=True)
+        self.assertIn("secret reasoning words", " ".join(r["visibleLabels"]))
+
+    def test_thinking_works_for_anthropic_blocks_and_inline_tags(self):
+        m = self.mock({"text": "hi", "thinking": "anthropic thought"}, style="anthropic")
+        r = self.chat(m, "go", config={"provider": "anthropic", "baseUrl": m.base})
+        self.assertEqual(r["thinkingBlocks"], 1)
+        m = self.mock("<think>inline thought</think>Answer")
+        r = self.chat(m, "go")
+        self.assertEqual(r["thinkingBlocks"], 1); self.assertIn("Answer", r["transcript"])
+
+    def test_show_thinking_can_be_turned_off(self):
+        m = self.mock({"text": "ok", "thinking": "hidden thoughts"})
+        r = self.chat(m, "go", config={"showThinking": False})
+        self.assertEqual(r["thinkingBlocks"], 0); self.assertNotIn("hidden thoughts", r["transcript"])
+
+    def test_thinking_is_never_sent_back(self):
+        m = self.mock({"text": "first", "thinking": "private chain"}, "second")
+        self.chat(m, "one", "two")
+        self.assertNotIn("private chain", json.dumps(m.requests[1]["json"]))
+
+    def test_thinking_before_a_tool_call(self):
+        m = self.mock({"text": tool("create_file", path="a.md", content="x"), "thinking": "I should create it"}, "done")
+        r = self.chat(m, "go")
+        self.assertTrue(self.f("a.md").exists()); self.assertEqual(r["thinkingBlocks"], 1)
+
+    def test_tool_cards_are_collapsed_and_open_on_click(self):
+        m = self.mock(tool("run_command", command="echo card-$((1+2))-xyz"), "done")
+        r = self.chat(m, "go")
+        self.assertNotIn("card-3-xyz", " ".join(r["visibleLabels"]))
+        self.assertIn("card-3-xyz", r["transcript"])
+        m = self.mock(tool("run_command", command="echo card-$((1+2))-xyz"), "done")
+        r = self.chat(m, "go", expandAll=True)
+        self.assertIn("card-3-xyz", " ".join(r["visibleLabels"]))
+
+    def test_empty_state_and_a_new_conversation(self):
+        m = self.mock("hi")
+        r = self.chat(m, "hello", save="/tmp/makdown-ai-panel.png")
+        self.assertNotIn("Summarize this document", " ".join(r["visibleLabels"]))
+        self.assertGreater(Path("/tmp/makdown-ai-panel.png").stat().st_size, 1000)
 
 
 # ---------------------------------------------------------------------------------------------------

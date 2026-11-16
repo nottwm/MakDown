@@ -273,7 +273,7 @@ void AiPanel::refresh() {
     const Ai::Provider* p = Ai::findProvider(c.provider);
     const QString name = p ? p->name : c.provider;
     const QString model = c.model(c.provider);
-    if (auto* l = status_->findChild<ElideLabel*>()) l->setText(model.isEmpty() ? name : name + " \u00b7 " + model);
+    if (auto* l = status_->findChild<QLabel*>("aiStatusText")) l->setText(model.isEmpty() ? name : name + " \u00b7 " + model);
     const bool noKey = p && !p->custom && c.key(p->id).isEmpty();
     bannerBox_->setVisible(noKey);
     banner_->setText(L("ai.noKey").arg(name));

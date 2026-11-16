@@ -480,7 +480,15 @@ void AiPanel::showPending(const QString& text) {
     scrollDown(false);
 }
 
+void AiPanel::setPendingText(const QString& text) {
+    pendingBase_ = text;
+    pendingLbl_->setText(text + QString(dotStep_, '.'));
+}
+
+QString AiPanel::pendingText() const { return list_->indexOf(pending_) >= 0 ? pendingBase_ : QString(); }
+
 void AiPanel::hidePending() {
+    pendingIsTool_ = false;
     dots_->stop();
     pending_->hide();
     list_->removeWidget(pending_);
@@ -563,7 +571,7 @@ void AiPanel::callModel() {
     const Ai::Provider* prov = Ai::findProvider(cfg.provider);
     const Ai::Api api = prov ? prov->api : Ai::Api::OpenAI;
     parser_.reset(new Ai::StreamParser(api));
-    rawBody_.clear(); httpStatus_ = 0; liveStream_ = cfg.stream; nonSse_ = sniffed_ = thinkCollapsed_ = false;
+    rawBody_.clear(); httpStatus_ = 0; liveStream_ = cfg.stream; nonSse_ = sniffed_ = thinkCollapsed_ = earlyStop_ = false;
     liveThink_ = liveAsst_ = -1;
     reply_ = nam_->post(req, rq.body);
     connect(reply_, &QNetworkReply::readyRead, this, [this] { onData(); });
@@ -573,7 +581,7 @@ void AiPanel::callModel() {
 // Bytes of the reply arrived. A streamed reply is parsed on the fly; an error body or a plain JSON reply (a server that
 // ignores "stream") is only collected and handled when the reply ends.
 void AiPanel::onData() {
-    if (!reply_ || cancelled_) return;
+    if (!reply_ || cancelled_ || earlyStop_) return;
     const QByteArray chunk = reply_->readAll();
     if (httpStatus_ == 0) httpStatus_ = reply_->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
     if (rawBody_.size() < (8 << 20)) rawBody_ += chunk;
@@ -591,6 +599,12 @@ void AiPanel::onData() {
     }
     if (nonSse_) return;
     parser_->feed(chunk);
+    if (Ai::inventedResultAt(parser_->text()) >= 0) {                      // the model is making up the tool's answer: enough
+        earlyStop_ = true;
+        flush_->stop();
+        QMetaObject::invokeMethod(reply_, "abort", Qt::QueuedConnection);
+        return;
+    }
     if (!flush_->isActive()) flush_->start();
 }
 
@@ -617,7 +631,16 @@ void AiPanel::flushLive() {
         else setAssistantText(liveAsst_, text);
         changed = true;
     }
-    if (Ai::streamInToolBlock(raw) && list_->indexOf(pending_) < 0) showPending(L("ai.preparing"));    // an action is being written
+    QString tname, tpath; int tchars = 0;
+    if (Ai::streamToolInfo(raw, &tname, &tpath, &tchars)) {                  // an action is being written: say which, and how far
+        QString what = tname.isEmpty() ? QString() : tname + (tpath.isEmpty() ? QString() : " " + tpath);
+        const QString label = what.isEmpty() ? L("ai.preparing") : L("ai.preparingDetail").arg(what, QLocale().formattedDataSize(qint64(tchars) * 1, 1, QLocale::DataSizeTraditionalFormat));
+        if (list_->indexOf(pending_) < 0) showPending(label); else setPendingText(label);
+        pendingIsTool_ = true;
+        changed = true;
+    } else if (pendingIsTool_) {                                               // the block is finished: the row has done its job
+        hidePending();
+    }
     if (changed) { scrollDown(false); emit contentUpdated(); }
 }
 
@@ -633,7 +656,7 @@ void AiPanel::onReply(Ai::Api api) {
     hidePending();
     if (cancelled_) { addEntry(Entry::Notice, L("ai.stopped")); finish(); return; }          // what streamed in stays on screen
     const bool okStatus = status >= 200 && status < 300;
-    if (status == 0 || (okStatus && r->error() != QNetworkReply::NoError)) { addEntry(Entry::Error, r->errorString()); finish(); return; }
+    if (status == 0 || (okStatus && !earlyStop_ && r->error() != QNetworkReply::NoError)) { addEntry(Entry::Error, r->errorString()); finish(); return; }
 
     Ai::Reply rep;
     if (liveStream_ && okStatus && sniffed_ && !nonSse_) {
@@ -648,6 +671,8 @@ void AiPanel::onReply(Ai::Api api) {
         rep = Ai::parseReply(api, status, rawBody_);
     }
     if (!rep.ok) { addEntry(Entry::Error, rep.error); finish(); return; }
+    const bool cutOff = rep.text.contains("[MakDown: the reply was cut off");
+    if (const int fake = Ai::inventedResultAt(rep.text); fake >= 0) rep.text = rep.text.left(fake).trimmed();     // made-up results and what follows
 
     const bool showThink = Ai::config().showThinking && !rep.thinking.isEmpty();
     if (rep.text.trimmed().isEmpty()) {
@@ -663,7 +688,10 @@ void AiPanel::onReply(Ai::Api api) {
             if (!entries_[liveThink_].touched && entries_[liveThink_].expanded) { entries_[liveThink_].expanded = false; refreshItem(liveThink_); }
         } else addEntry(Entry::Thinking, rep.thinking, wordsLabel(rep.thinking));
     }
-    const Ai::Parsed parsed = Ai::parseToolCalls(rep.text);
+    Ai::Parsed parsed = Ai::parseToolCalls(rep.text);
+    if (cutOff)                                                              // a tool call cut by the output limit: tell the model why
+        for (Ai::ToolCall& tc : parsed.calls)
+            if (!tc.error.isEmpty()) tc.error += ". The reply hit the output limit while this call was being written. Write a much shorter call: split a big file into several smaller ones, or build it up in steps";
     if (liveAsst_ >= 0) {
         if (parsed.text.isEmpty() && liveAsst_ == entries_.size() - 1) removeLastEntry();   // only a tool call was written
         else setAssistantText(liveAsst_, parsed.text);

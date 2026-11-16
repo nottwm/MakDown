@@ -369,6 +369,36 @@ void StreamParser::handleLine(const QByteArray& line, Delta* d) {
 
 bool streamInToolBlock(const QString& t) { return t.lastIndexOf("<makdown_tool") > t.lastIndexOf("</makdown_tool>"); }
 
+bool streamToolInfo(const QString& t, QString* name, QString* path, int* chars) {
+    if (!streamInToolBlock(t)) return false;
+    const int s = t.lastIndexOf("<makdown_tool");
+    const int gt = t.indexOf('>', s);
+    static const QRegularExpression nameRe("name\\s*=\\s*[\"']([A-Za-z_][A-Za-z0-9_]*)[\"']");
+    const QRegularExpressionMatch m = nameRe.match(t.mid(s, gt < 0 ? -1 : gt - s));
+    *name = m.hasMatch() ? m.captured(1) : QString();
+    *path = QString();
+    static const QRegularExpression pathRe("<path>(.*?)</path>", QRegularExpression::DotMatchesEverythingOption);
+    const QRegularExpressionMatch pm = pathRe.match(t, s);
+    if (pm.hasMatch()) *path = pm.captured(1).trimmed();
+    *chars = gt < 0 ? 0 : int(t.size() - gt - 1);
+    return true;
+}
+
+int inventedResultAt(const QString& t) {
+    int pos = 0;
+    while (true) {
+        const int r = t.indexOf("<tool_result", pos);
+        if (r < 0) return -1;
+        // inside a tool block (a file that talks about tool results)? then it is just content
+        const int open = t.lastIndexOf("<makdown_tool", r);
+        const int close = open < 0 ? -1 : t.indexOf("</makdown_tool>", open);
+        const bool inside = open >= 0 && (close < 0 || close > r);
+        if (!inside) return r;
+        pos = close < 0 ? t.size() : close;
+        if (close < 0) return -1;
+    }
+}
+
 QString streamPreview(const QString& t) {
     QString s = parseToolCalls(t).text;
     const int i = s.indexOf("<makdown_tool");               // an unterminated block comes back as text: cut it off

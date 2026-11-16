@@ -38,7 +38,7 @@ Everything except Anthropic uses the OpenAI `chat/completions` format. OpenCode 
 
 ## Using the assistant
 
-The chat shows your messages as bubbles, the assistant's answers as rendered Markdown, and everything the assistant *does* as cards: a collapsed **Thinking** card (with a word count) when the model reasons, and one card per tool call with a green / amber / red dot for ok / denied / error. Click a card to open its details (the file written, the command's output). While a request is waiting for its first words an animated *Thinking...* row is shown; then the reasoning appears in an open Thinking card that grows live and folds away when the answer starts (it stays open if you opened it yourself), and the answer is typed out below it. Tool calls are never shown as raw text: while the model writes one the row reads *Preparing an action*, and the finished call appears as a card. *Stop* keeps what has arrived but does not add the partial answer to the conversation. The provider and model line under the title opens the AI settings. An empty chat offers a few starter prompts.
+The chat shows your messages as bubbles, the assistant's answers as rendered Markdown, and everything the assistant *does* as cards: a collapsed **Thinking** card (with a word count) when the model reasons, and one card per tool call with a green / amber / red dot for ok / denied / error. Click a card to open its details (the file written, the command's output). While a request is waiting for its first words an animated *Thinking...* row is shown; then the reasoning appears in an open Thinking card that grows live and folds away when the answer starts (it stays open if you opened it yourself), and the answer is typed out below it. Tool calls are never shown as raw text: while the model writes one the row reads *Preparing an action: create_file notes/a.md (3.2 KiB)* and grows with it, and the finished call appears as a card. *Stop* keeps what has arrived but does not add the partial answer to the conversation. The provider and model line under the title opens the AI settings. An empty chat offers a few starter prompts.
 
 Thinking is picked up from Anthropic `thinking` blocks, the `reasoning_content` / `reasoning` fields (DeepSeek, OpenCode, OpenRouter, ...) and inline `<think>...</think>` text (Qwen and similar).
 
@@ -68,6 +68,11 @@ The tools are described in the system prompt and implemented in the app (`ui/aip
 | `new_document` | `content` | A new untitled document (like File > New with text). |
 | `run_command` | `command` | One shell command in the working folder (`/bin/sh -c`, `cmd.exe /c` on Windows). No stdin, no terminal, stopped after 120 s, output trimmed. Asks first. |
 | `ask_user` | `question`, optional `options` (one per line) | Shows a dialog; the answer goes back to the model. Ends the batch. |
+
+## When the model misbehaves
+
+- **Made-up results:** a model that does not stop after its tool call and invents the `<tool_result>` (and further calls) is cut off at that point: the invented part is not shown, not stored and never run.
+- **Output limit:** a very long file can hit the model's output limit in the middle of a tool call. The call is then not run, and the model is told why and asked to write smaller pieces. For big documents ask for them in several files or steps.
 
 ## Safety
 

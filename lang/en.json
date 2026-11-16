@@ -1,6 +1,6 @@
 {
   "name": "English",
-  "revision": 5,
+  "revision": 6,
   "builtin": true,
   "plural": "one_other",
   "strings": {
@@ -420,6 +420,7 @@
     "ai.set.off": "Off",
     "ai.preparing": "Preparing an action",
     "ai.set.stream": "Stream replies",
-    "ai.set.streamHint": "Shows the thinking and the answer while the model writes them. Turn it off for a server that cannot stream (MakDown also copes by itself when a server answers in one piece)."
+    "ai.set.streamHint": "Shows the thinking and the answer while the model writes them. Turn it off for a server that cannot stream (MakDown also copes by itself when a server answers in one piece).",
+    "ai.preparingDetail": "Preparing an action: %1 (%2)"
   }
 }

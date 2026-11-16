@@ -466,6 +466,11 @@ static QJsonObject handle(const QJsonObject& q) {
         r["sawEvents"] = sp.sawEvents(); r["truncated"] = sp.truncated(); r["done"] = sp.done();
     } else if (cmd == "ai_preview") {
         r["preview"] = Ai::streamPreview(q["text"].toString()); r["inTool"] = Ai::streamInToolBlock(q["text"].toString());
+    } else if (cmd == "ai_toolinfo") {
+        QString n, p; int chars = 0;
+        const bool in = Ai::streamToolInfo(q["text"].toString(), &n, &p, &chars);
+        r["inTool"] = in; r["name"] = n; r["path"] = p; r["chars"] = chars;
+        r["fakeAt"] = Ai::inventedResultAt(q["text"].toString());
     } else if (cmd == "ai_prompt") {
         Ai::PromptContext pc; pc.workDir = q["workDir"].toString(); pc.openFile = q["openFile"].toString(); pc.custom = q["custom"].toString();
         pc.os = "TestOS"; pc.shell = "/bin/sh";
@@ -522,7 +527,8 @@ static QJsonObject handle(const QJsonObject& q) {
         bool done = false, finishedAll = true;
         QObject::connect(&panel, &AiPanel::turnFinished, [&] { done = true; });
         QStringList snaps;                                  // the conversation each time streamed content was added
-        QObject::connect(&panel, &AiPanel::contentUpdated, [&] { const QString t = panel.transcriptText(); if (snaps.isEmpty() || snaps.last() != t) snaps << t; });
+        QStringList pend;                                   // the progress row each time
+        QObject::connect(&panel, &AiPanel::contentUpdated, [&] { const QString t = panel.transcriptText(); if (snaps.isEmpty() || snaps.last() != t) snaps << t; const QString pt = panel.pendingText(); if (!pt.isEmpty() && (pend.isEmpty() || pend.last() != pt)) pend << pt; });
         if (q["stopAfter"].toInt() > 0) QTimer::singleShot(q["stopAfter"].toInt(), &panel, [&] { panel.stop(); });
         for (const QJsonValue& m : q["messages"].toArray()) {
             done = false;
@@ -533,7 +539,7 @@ static QJsonObject handle(const QJsonObject& q) {
         }
         g_clickButton.clear(); g_fillText.clear();
         r["transcript"] = panel.transcriptText(); r["history"] = panel.historySize(); r["busy"] = panel.busy(); r["finished"] = finishedAll;
-        r["thinkingBlocks"] = panel.thinkingBlocks(); r["snapshots"] = arr(snaps);
+        r["thinkingBlocks"] = panel.thinkingBlocks(); r["snapshots"] = arr(snaps); r["pendingTexts"] = arr(pend);
         if (q["expandAll"].toBool()) {                  // click every collapsible card header, like a user would
             int clicked = 0;
             for (QFrame* f : panel.findChildren<QFrame*>()) if (f->property("aiToggle").toBool()) { QTest::mouseClick(f, Qt::LeftButton); ++clicked; }

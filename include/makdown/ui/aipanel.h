@@ -58,6 +58,7 @@ public:
     void stop();
     QString transcriptText() const;                      // plain text of the conversation (tests, debugging)
     int historySize() const { return history_.size(); }
+    QString pendingText() const;                         // the progress row's text, empty when it is not shown (tests)
     int thinkingBlocks() const;                          // how many thinking blocks the conversation shows (tests)
 
 signals:
@@ -99,6 +100,7 @@ private:
     void applyStyle();                                   // the panel's style sheet, from the theme
     void showPending(const QString& text);               // the animated "Thinking..." row
     void hidePending();
+    void setPendingText(const QString& text);
     void scrollDown(bool force);
     void updateEmpty();
     void growInput();
@@ -121,7 +123,7 @@ private:
     std::unique_ptr<Ai::StreamParser> parser_;
     QByteArray rawBody_;
     int httpStatus_ = 0;
-    bool liveStream_ = false, nonSse_ = false, sniffed_ = false, thinkCollapsed_ = false;
+    bool liveStream_ = false, nonSse_ = false, sniffed_ = false, thinkCollapsed_ = false, earlyStop_ = false, pendingIsTool_ = false;
     int liveThink_ = -1, liveAsst_ = -1;                 // entries filled while the reply streams in
     QTimer* flush_ = nullptr;                            // coalesces updates (the Markdown is rendered again each time)
     QProcess* proc_ = nullptr;

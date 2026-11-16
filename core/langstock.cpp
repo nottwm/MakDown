@@ -5,7 +5,7 @@
 
 static const char* const kLangen = R"JSON({
   "name": "English",
-  "revision": 5,
+  "revision": 6,
   "builtin": true,
   "plural": "one_other",
   "strings": {
@@ -425,14 +425,15 @@ static const char* const kLangen = R"JSON({
     "ai.set.off": "Off",
     "ai.preparing": "Preparing an action",
     "ai.set.stream": "Stream replies",
-    "ai.set.streamHint": "Shows the thinking and the answer while the model writes them. Turn it off for a server that cannot stream (MakDown also copes by itself when a server answers in one piece)."
+    "ai.set.streamHint": "Shows the thinking and the answer while the model writes them. Turn it off for a server that cannot stream (MakDown also copes by itself when a server answers in one piece).",
+    "ai.preparingDetail": "Preparing an action: %1 (%2)"
   }
 }
 )JSON";
 
 static const char* const kLangpl = R"JSON({
   "name": "Polski",
-  "revision": 5,
+  "revision": 6,
   "builtin": true,
   "plural": "polish",
   "strings": {
@@ -854,14 +855,15 @@ static const char* const kLangpl = R"JSON({
     "ai.set.off": "Wył.",
     "ai.preparing": "Przygotowuję akcję",
     "ai.set.stream": "Odpowiedzi strumieniowe",
-    "ai.set.streamHint": "Pokazuje rozumowanie i odpowiedź na bieżąco, gdy model je pisze. Wyłącz dla serwera bez strumieniowania (MakDown radzi sobie też sam, gdy serwer odpowiada w całości)."
+    "ai.set.streamHint": "Pokazuje rozumowanie i odpowiedź na bieżąco, gdy model je pisze. Wyłącz dla serwera bez strumieniowania (MakDown radzi sobie też sam, gdy serwer odpowiada w całości).",
+    "ai.preparingDetail": "Przygotowuję akcję: %1 (%2)"
   }
 }
 )JSON";
 
 static const char* const kLangru = R"JSON({
   "name": "Русский",
-  "revision": 5,
+  "revision": 6,
   "builtin": true,
   "plural": "east_slavic",
   "strings": {
@@ -1283,7 +1285,8 @@ static const char* const kLangru = R"JSON({
     "ai.set.off": "Выкл.",
     "ai.preparing": "Готовлю действие",
     "ai.set.stream": "Потоковые ответы",
-    "ai.set.streamHint": "Показывает размышления и ответ по мере того, как модель их пишет. Отключите для сервера без потоковой передачи (MakDown справляется и сам, если сервер отвечает целиком)."
+    "ai.set.streamHint": "Показывает размышления и ответ по мере того, как модель их пишет. Отключите для сервера без потоковой передачи (MakDown справляется и сам, если сервер отвечает целиком).",
+    "ai.preparingDetail": "Готовлю действие: %1 (%2)"
   }
 }
 )JSON";

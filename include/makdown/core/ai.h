@@ -116,6 +116,11 @@ private:
 // What to show of a half-written answer: complete tool blocks and a tool block still being written are hidden.
 QString streamPreview(const QString& text);
 bool streamInToolBlock(const QString& text);                   // the text ends inside an unfinished <makdown_tool> block
+// The block being written right now: tool name, its <path> if already written, and how many characters it has so far.
+bool streamToolInfo(const QString& text, QString* name, QString* path, int* chars);
+// A model that does not stop after its tool call sometimes invents the <tool_result> and carries on with made-up calls.
+// Returns where that invention starts (outside any tool block), or -1. Everything from there on must be ignored.
+int inventedResultAt(const QString& text);
 
 // ---- system prompt --------------------------------------------------------------------------------
 struct PromptContext {

@@ -22,6 +22,9 @@
 #include <QMap>
 #include <QString>
 #include <QStringList>
+#include <QUrl>
+
+class QHostAddress;                                     // QtNetwork: only ai.cpp needs the full type
 
 namespace Ai {
 
@@ -53,6 +56,8 @@ struct Config {
     QString customPrompt;                       // added on top of MakDown's own prompt
     bool confirmFiles = true;                   // ask before the AI creates / overwrites files
     bool confirmCommands = true;                // ask before the AI runs a terminal command
+    bool web = true;                            // the AI may search the web and read web pages (web_search / web_fetch)
+    bool confirmWeb = true;                     // ask before the AI searches or opens a page
     int  maxSteps = 25;                         // model calls per message (a tool loop stops here)
     bool stream = true;                         // show thinking and answer while the model writes them (server-sent events)
     bool showThinking = true;                   // show the model's reasoning (collapsed) when the provider returns it
@@ -129,6 +134,7 @@ struct PromptContext {
     QString custom;             // the user's custom prompt
     QString os;                 // "Linux", "Windows", ...
     QString shell;              // "/bin/sh" or "cmd.exe"
+    bool web = true;            // web_search / web_fetch are switched on (Config::web)
 };
 QString basePrompt();                                         // MakDown's own prompt (tool descriptions included)
 QString systemPrompt(const PromptContext& ctx);               // base + environment + the custom prompt overlay
@@ -146,6 +152,22 @@ struct Parsed {
 Parsed parseToolCalls(const QString& reply);
 QStringList toolNames();
 QString toolResult(const QString& name, const QString& status, const QString& body);   // the <tool_result> text; status: ok | error | denied
+
+// ---- web access (web_search / web_fetch) ----------------------------------------------------------
+// The network part lives in the panel (it needs the event loop); everything that can be decided without a
+// connection is here: which addresses may be opened, how a search page is read, how a web page becomes text.
+struct SearchHit { QString title, url, snippet; };
+QUrl searchUrl(const QString& query);                           // DuckDuckGo's HTML search, or $MAKDOWN_WEB_SEARCH_URL?q=...
+bool searchUrlOverridden();                                     // $MAKDOWN_WEB_SEARCH_URL is set (self-hosted engine, tests): that address is trusted
+bool allowLocalWeb();                                           // $MAKDOWN_WEB_ALLOW_LOCAL=1: local / private addresses may be opened (tests)
+bool isPublicAddress(const QHostAddress& a);                    // not loopback, private, link-local, multicast ...
+bool checkFetchUrl(const QUrl& url, QString* error);            // http(s) only, no credentials, no local names or private addresses
+QList<SearchHit> parseSearchResults(const QString& html, int max = 8);
+QString formatSearchResults(const QString& query, const QList<SearchHit>& hits);
+bool looksLikeChallengePage(const QString& html);               // the engine asked for a human check instead of answering
+QString decodeBody(const QByteArray& body, const QString& contentType);        // bytes -> text using the charset of the header / <meta>
+QString htmlToText(const QString& html, const QUrl& base = QUrl());           // readable Markdown-ish text; links keep their address
+QString decodeEntities(const QString& s);
 
 // ---- sandboxed file helpers (all paths are relative to, and confined to, `root`) ------------------
 QString resolveInside(const QString& root, const QString& path, QString* error);   // absolute path or empty

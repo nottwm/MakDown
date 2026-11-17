@@ -1,6 +1,6 @@
 # AI assistant
 
-MakDown has an optional AI assistant: a chat page in the side bar (`Ctrl+Shift+A`, or the sparkle icon on the rail) that can write and edit your files, read your project, run terminal commands and ask you questions.
+MakDown has an optional AI assistant: a chat page in the side bar (`Ctrl+Shift+A`, or the sparkle icon on the rail) that can write and edit your files, read your project, run terminal commands, search the web and ask you questions.
 
 Nothing is sent anywhere until you press **Send**, and everything can be switched off.
 
@@ -18,6 +18,8 @@ Nothing is sent anywhere until you press **Send**, and everything can be switche
 | **Model** | Pick a suggestion or type any model id your provider offers. Defaults are only suggestions; model names change, so check your provider's list. |
 | **Custom prompt** | Text added on top of MakDown's own prompt in every conversation: language, tone, house style, project rules. It is placed after MakDown's prompt and cannot switch off the confirmation dialogs. *Show MakDown's built-in prompt...* displays the part you build on. |
 | **Ask before files / commands** | Confirmation dialogs for creating or overwriting files and for running commands (both on by default). |
+| **Web access** | On by default. Lets the model use `web_search` and `web_fetch` when it needs current or unknown information. Off: both tools fail and the model is told it has no web access. See [Web access](#web-access). |
+| **Ask before the AI searches the web or opens a page** | On by default. One dialog per search or page; *Allow for this conversation* covers both. |
 | **Stream replies** | On by default. The thinking card and the answer grow while the model writes them (server-sent events, Anthropic and OpenAI formats). Turn it off for a server that cannot stream; a server that answers in one piece despite the request is handled automatically. |
 | **Show the model's thinking** | Shows the reasoning some models return as a collapsed *Thinking* card above the answer (click to open). Reasoning is for you only and is never sent back to the model. On by default. |
 | **Extended thinking budget** | Anthropic only: off, or at least 1024 tokens the model may think with before answering. Other providers think by themselves (reasoning models) or not at all. |
@@ -68,6 +70,20 @@ The tools are described in the system prompt and implemented in the app (`ui/aip
 | `new_document` | `content` | A new untitled document (like File > New with text). |
 | `run_command` | `command` | One shell command in the working folder (`/bin/sh -c`, `cmd.exe /c` on Windows). No stdin, no terminal, stopped after 120 s, output trimmed. Asks first. |
 | `ask_user` | `question`, optional `options` (one per line) | Shows a dialog; the answer goes back to the model. Ends the batch. |
+| `web_search` | `query` | Searches the web (DuckDuckGo, no key needed) and returns up to 8 results: title, address, snippet. Asks first. |
+| `web_fetch` | `url`, optional `start` | Downloads one http(s) page and returns it as plain text (headings and lists kept, each link followed by its address in parentheses). Long pages come back in parts of 20000 characters; `start` is the character to continue from. Asks first. |
+
+## Web access
+
+The model searches when it decides it needs to (recent events, current versions, documentation, a fact it is unsure about) and reads the best results with `web_fetch`; its answer should name the pages it used. You see every search and every page as a card, and by default you approve each one first.
+
+- **What leaves your computer:** the search words go to DuckDuckGo; `web_fetch` contacts the site you see in the dialog (and sites it redirects to). What the model reads comes back into the conversation, so it goes to your AI provider like everything else. The model is told never to put file contents or secrets in a query, but you see the query before it is sent while the confirmation is on.
+- **Only the public internet:** `web_fetch` refuses `localhost`, `.local` / `.internal` names, private and link-local addresses (`10.x`, `192.168.x`, `169.254.x`, IPv6 equivalents) and names that resolve to them, on every redirect hop. It accepts `http://` and `https://` only, no `user:password@` addresses, and nothing larger than 2 MB. Use `read_file` for files.
+- **What it can read:** HTML pages, plain text, Markdown, JSON and XML. Images, PDFs and other binaries are refused. Pages that build their text with JavaScript or need a login come back empty; the model is told so.
+- **Search results and pages are data.** A page that says "ignore your instructions" is not obeyed, but see the warning under Safety.
+- **Stop** cancels a running search or download. Every request has a 20 s transfer and 30 s total limit.
+- **Switching it off:** untick *Web access* (`"web": false` in `ai.jsonc`). *No AI* switches it off together with everything else.
+- DuckDuckGo may answer a burst of searches with a human check; the model is told and falls back to `web_fetch` or its own knowledge. A self-hosted engine with the same result page layout can be used by setting `MAKDOWN_WEB_SEARCH_URL` (the query is added as `?q=`); `MAKDOWN_WEB_ALLOW_LOCAL=1` lifts the local-address rule (both exist for the test-suite and self-hosting).
 
 ## When the model misbehaves
 
@@ -79,7 +95,8 @@ The tools are described in the system prompt and implemented in the app (`ui/aip
 - File tools only touch the **working folder** (the explorer root). `..`, absolute paths elsewhere and symbolic links leading out are refused; `.git` is off limits.
 - `run_command` is *not* sandboxed: it runs with your permissions. It asks every time unless you pick *Allow for this conversation* or untick the setting. Read the command before you allow it.
 - File contents and command output are passed to the model as data. A file that says "ignore your instructions" should not be obeyed, but no model is immune: do not point the assistant at untrusted folders with commands auto-approved.
-- The text you send, the open document if enabled, and any file or command output the model asks for go to the provider you chose.
+- The text you send, the open document if enabled, and any file, command output or web page the model asks for go to the provider you chose.
+- Web pages are written by strangers. A page can try to steer the model; with commands auto-approved that is the dangerous combination, so keep *Ask before the AI runs terminal commands* on when you let it read the web.
 - API keys are stored in plain text (file mode `0600`) in `ai.jsonc`; do not commit or share that file.
 
 ## Limits

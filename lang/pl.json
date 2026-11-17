@@ -1,6 +1,6 @@
 {
   "name": "Polski",
-  "revision": 6,
+  "revision": 7,
   "builtin": true,
   "plural": "polish",
   "strings": {
@@ -423,6 +423,13 @@
     "ai.preparing": "Przygotowuję akcję",
     "ai.set.stream": "Odpowiedzi strumieniowe",
     "ai.set.streamHint": "Pokazuje rozumowanie i odpowiedź na bieżąco, gdy model je pisze. Wyłącz dla serwera bez strumieniowania (MakDown radzi sobie też sam, gdy serwer odpowiada w całości).",
-    "ai.preparingDetail": "Przygotowuję akcję: %1 (%2)"
+    "ai.preparingDetail": "Przygotowuję akcję: %1 (%2)",
+    "ai.confirm.search": "Asystent chce wyszukać w internecie:\n\n%1",
+    "ai.confirm.fetch": "Asystent chce pobrać tę stronę internetową:\n\n%1",
+    "ai.set.web": "Pozwól AI przeszukiwać internet i czytać strony",
+    "ai.set.webHint": "Dodaje narzędzia web_search i web_fetch. Hasła wyszukiwania i adresy wybrane przez model trafiają do DuckDuckGo oraz do otwieranych stron; przeczytane strony trafiają do Twojego dostawcy AI. Wyłączone: model dowiaduje się, że nie ma dostępu do internetu.",
+    "ai.set.confirmWeb": "Pytaj, zanim AI przeszuka internet lub otworzy stronę",
+    "ai.searching": "Szukam w internecie",
+    "ai.fetching": "Czytam stronę"
   }
 }

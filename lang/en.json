@@ -1,6 +1,6 @@
 {
   "name": "English",
-  "revision": 6,
+  "revision": 7,
   "builtin": true,
   "plural": "one_other",
   "strings": {
@@ -421,6 +421,13 @@
     "ai.preparing": "Preparing an action",
     "ai.set.stream": "Stream replies",
     "ai.set.streamHint": "Shows the thinking and the answer while the model writes them. Turn it off for a server that cannot stream (MakDown also copes by itself when a server answers in one piece).",
-    "ai.preparingDetail": "Preparing an action: %1 (%2)"
+    "ai.preparingDetail": "Preparing an action: %1 (%2)",
+    "ai.confirm.search": "The assistant wants to search the web for:\n\n%1",
+    "ai.confirm.fetch": "The assistant wants to download this web page:\n\n%1",
+    "ai.set.web": "Let the AI search the web and read web pages",
+    "ai.set.webHint": "Adds the tools web_search and web_fetch. The search words and the addresses the model picks are sent to DuckDuckGo and to the sites it opens; the pages it reads go to your AI provider. Off: the model is told it has no web access.",
+    "ai.set.confirmWeb": "Ask before the AI searches the web or opens a page",
+    "ai.searching": "Searching the web",
+    "ai.fetching": "Reading the page"
   }
 }

@@ -13,6 +13,8 @@
 #include <QFileInfo>
 #include <QFontMetrics>
 #include <QFrame>
+#include <QHostAddress>
+#include <QHostInfo>
 #include <QHBoxLayout>
 #include <QKeyEvent>
 #include <QLabel>
@@ -504,7 +506,7 @@ void AiPanel::newChat() {
     if (busy_) stop();
     for (QWidget* w : items_) { list_->removeWidget(w); w->deleteLater(); }
     items_.clear(); entries_.clear(); history_.clear();
-    sessionFiles_ = sessionCommands_ = false;
+    sessionFiles_ = sessionCommands_ = sessionWeb_ = false;
     updateEmpty();
 }
 
@@ -561,6 +563,7 @@ void AiPanel::callModel() {
     pc.custom = cfg.customPrompt;
     pc.os = QSysInfo::prettyProductName();
     pc.shell = platform::shellName();
+    pc.web = cfg.web;
     const Ai::Request rq = Ai::buildRequest(cfg, Ai::systemPrompt(pc), history_, cfg.stream);
     if (!rq.error.isEmpty()) { addEntry(Entry::Error, rq.error); finish(); return; }
 
@@ -819,7 +822,130 @@ QString AiPanel::runTool(const Ai::ToolCall& c, bool* endBatch) {
         if (!answered) return done("error", "Q: " + q + "\nThe user closed the question without answering.", name);
         return done("ok", "Q: " + q + "\nThe user answered: " + a, name);
     }
+
+    // ---- web_search
+    if (name == "web_search") {
+        const QString q = arg("query").trimmed(), title = name + " \u00b7 " + q;
+        if (q.isEmpty()) return done("error", "needs <query>");
+        if (!cfg.web) return done("error", "web access is switched off in MakDown's settings (Settings > Preferences > AI). Tell the user if you need it.", title);
+        if (q.size() > 400) return done("error", "the query is too long (400 characters at most): use a few key words", title);
+        if (cfg.confirmWeb && !confirm(L("ai.confirm.search").arg(q), QString(), &sessionWeb_, true))
+            return done("denied", "the user denied this action", title);
+        QByteArray body; QString ctype, err; QUrl fin; bool cut = false;
+        showPending(L("ai.searching"));
+        const bool ok = webGet(Ai::searchUrl(q), Ai::searchUrlOverridden(), &body, &ctype, &fin, &cut, &err);
+        hidePending();
+        if (cancelled_) return done("error", "[stopped by the user]", title);
+        if (!ok) return done("error", "the search failed: " + err, title);
+        const QString html = Ai::decodeBody(body, ctype);
+        const QList<Ai::SearchHit> hits = Ai::parseSearchResults(html);
+        if (hits.isEmpty()) {
+            if (Ai::looksLikeChallengePage(html)) return done("error", "the search engine asked for a human check instead of answering (too many searches?). Try again later, or use web_fetch with an address you know.", title);
+            return done("ok", "No results for \"" + q + "\". Try other or fewer words.", title);
+        }
+        return done("ok", Ai::formatSearchResults(q, hits), title);
+    }
+
+    // ---- web_fetch
+    if (name == "web_fetch") {
+        const QString raw = arg("url").trimmed(), title = name + " \u00b7 " + raw;
+        if (raw.isEmpty()) return done("error", "needs <url>");
+        if (!cfg.web) return done("error", "web access is switched off in MakDown's settings (Settings > Preferences > AI). Tell the user if you need it.", title);
+        QUrl url(raw.contains("://") ? raw : "https://" + raw);
+        QString err;
+        if (!Ai::checkFetchUrl(url, &err)) return done("error", err, title);
+        bool okStart = true;
+        const int start = has("start") ? arg("start").trimmed().toInt(&okStart) : 0;
+        if (!okStart || start < 0) return done("error", "<start> must be a whole number of characters, 0 or more", title);
+        if (cfg.confirmWeb && !confirm(L("ai.confirm.fetch").arg(url.toString()), QString(), &sessionWeb_, true))
+            return done("denied", "the user denied this action", title);
+        QByteArray body; QString ctype; QUrl fin; bool cut = false;
+        showPending(L("ai.fetching"));
+        const bool ok = webGet(url, false, &body, &ctype, &fin, &cut, &err);
+        hidePending();
+        if (cancelled_) return done("error", "[stopped by the user]", title);
+        if (!ok) return done("error", "could not load the page: " + err, title);
+        const QString ct = ctype.toLower();
+        const bool isHtml = ct.contains("html") || (ct.isEmpty() && body.trimmed().startsWith("<"));
+        const bool isText = ct.startsWith("text/") || ct.contains("json") || ct.contains("xml") || ct.contains("javascript") || ct.contains("markdown");
+        if (!isHtml && !isText) return done("error", "cannot read this content type (" + (ctype.isEmpty() ? QString("unknown") : ctype) + "): only web pages and text files are supported", title);
+        QString text = Ai::decodeBody(body, ctype);
+        if (isHtml) text = Ai::htmlToText(text, fin);
+        if (text.size() > 400000) { text.truncate(400000); cut = true; }
+        const int window = 20000;
+        if (start > 0 && start >= text.size()) return done("error", QString("<start> %1 is past the end of the page (%2 characters)").arg(start).arg(text.size()), title);
+        QString out = "URL: " + fin.toString() + "\n\n" + text.mid(start, window);
+        if (start + window < text.size()) out += QString("\n\n[characters %1-%2 of %3%4. To read on, call web_fetch again with <start>%2</start>]").arg(start).arg(start + window).arg(text.size()).arg(cut ? "+" : "");
+        else if (cut) out += "\n\n[the page was cut off at the size limit]";
+        if (text.trimmed().isEmpty()) out = "URL: " + fin.toString() + "\n\n(the page has no readable text: it probably needs JavaScript or a login)";
+        return done("ok", out, title);
+    }
     return done("error", "unhandled tool");
+}
+
+bool AiPanel::hostIsPublic(const QString& host, QString* error) {
+    QEventLoop loop;
+    QHostInfo info; bool got = false;
+    QHostInfo::lookupHost(host, &loop, [&](const QHostInfo& i) { info = i; got = true; loop.quit(); });
+    QTimer limit; limit.setSingleShot(true); QObject::connect(&limit, &QTimer::timeout, &loop, &QEventLoop::quit); limit.start(10000);
+    QTimer tick; QObject::connect(&tick, &QTimer::timeout, &loop, [&] { if (cancelled_) loop.quit(); }); tick.start(100);
+    QPointer<AiPanel> self(this);
+    if (!got) loop.exec();
+    if (!self) return false;
+    if (!got) { *error = cancelled_ ? QString("stopped by the user") : "the host name " + host + " did not resolve in time"; return false; }
+    if (info.error() != QHostInfo::NoError || info.addresses().isEmpty()) { *error = "cannot resolve " + host + ": " + info.errorString(); return false; }
+    for (const QHostAddress& a : info.addresses())
+        if (!Ai::isPublicAddress(a)) { *error = host + " points to a local or private network address, which is not opened"; return false; }
+    return true;
+}
+
+bool AiPanel::webGet(const QUrl& start, bool trusted, QByteArray* body, QString* contentType, QUrl* finalUrl, bool* truncated, QString* error) {
+    const int kMaxBytes = 2 * 1024 * 1024;
+    QUrl url = start;
+    *truncated = false;
+    QPointer<AiPanel> self(this);
+    for (int hop = 0; hop <= 5; ++hop) {
+        if (cancelled_) { *error = "stopped by the user"; return false; }
+        if (!trusted && !Ai::checkFetchUrl(url, error)) return false;
+        if (url.scheme() != "http" && url.scheme() != "https") { *error = "only http:// and https:// addresses can be opened"; return false; }
+        QHostAddress literal;
+        if (!trusted && !Ai::allowLocalWeb() && !literal.setAddress(url.host()) && !hostIsPublic(url.host(), error)) return false;
+        if (!self) return false;
+
+        QNetworkRequest req(url);
+        req.setRawHeader("User-Agent", "Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0 MakDown");
+        req.setRawHeader("Accept", "text/html,application/xhtml+xml,text/plain,text/markdown,application/json;q=0.9,*/*;q=0.1");
+        req.setRawHeader("Accept-Language", "en,*;q=0.5");
+        req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::ManualRedirectPolicy);
+        req.setTransferTimeout(20000);
+        QNetworkReply* r = nam_->get(req);
+        QByteArray data; bool tooBig = false, timedOut = false;
+        QEventLoop loop;
+        QObject::connect(r, &QNetworkReply::readyRead, &loop, [&] { data += r->readAll(); if (data.size() > kMaxBytes) { tooBig = true; r->abort(); } });
+        QObject::connect(r, &QNetworkReply::finished, &loop, &QEventLoop::quit);
+        QTimer tick; QObject::connect(&tick, &QTimer::timeout, &loop, [&] { if (cancelled_) r->abort(); }); tick.start(100);
+        QTimer total; total.setSingleShot(true); QObject::connect(&total, &QTimer::timeout, &loop, [&] { timedOut = true; r->abort(); }); total.start(30000);
+        if (!r->isFinished()) loop.exec();
+        if (!self) { r->deleteLater(); return false; }
+        if (r->isOpen()) data += r->readAll();                  // an aborted reply is closed
+        const int status = r->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        const QByteArray loc = r->rawHeader("Location");
+        const QString ctype = r->header(QNetworkRequest::ContentTypeHeader).toString();
+        const QNetworkReply::NetworkError netErr = r->error();
+        const QString netMsg = r->errorString();
+        r->deleteLater();
+
+        if (cancelled_) { *error = "stopped by the user"; return false; }
+        if (status >= 300 && status < 400 && !loc.isEmpty()) { url = url.resolved(QUrl::fromEncoded(loc.trimmed())); continue; }
+        if (tooBig) { data.truncate(kMaxBytes); *truncated = true; }
+        else if (timedOut) { *error = "the server did not answer in time (30 s)"; return false; }
+        else if (status >= 400) { *error = QString("the server answered HTTP %1").arg(status); return false; }
+        else if (netErr != QNetworkReply::NoError) { *error = netMsg; return false; }
+        *body = data; *contentType = ctype; *finalUrl = url;
+        return true;
+    }
+    *error = "too many redirects";
+    return false;
 }
 
 bool AiPanel::confirm(const QString& what, const QString& detail, bool* sessionFlag, bool defaultAllow) {

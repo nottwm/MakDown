@@ -79,7 +79,7 @@ Optional built-in vim engine (`Ctrl+Alt+V`):
 Editable JSON packs for **C, C++, Makefile, linker scripts, Rust, Bash, Batch, HTML/XML, Python, CSS, JavaScript/TypeScript**. Add your own language by dropping a `.json` file in a folder.
 
 ### AI assistant (optional)
-A chat page in the side bar (`Ctrl+Shift+A`) for Anthropic, OpenAI, OpenRouter, DeepSeek, Hugging Face, OpenCode Zen / Go or any OpenAI compatible server. It can create files, read your project, run terminal commands (with your approval) and ask you questions through built-in tools. Add a custom prompt and your API key in Settings > Preferences > AI; **No AI** removes every AI control. See [`ai.md`](Documentation/ai.md).
+A chat page in the side bar (`Ctrl+Shift+A`) for Anthropic, OpenAI, OpenRouter, DeepSeek, Hugging Face, OpenCode Zen / Go or any OpenAI compatible server. It can create files, read your project, run terminal commands, search the web and read pages (each with your approval) and ask you questions through built-in tools. Add a custom prompt and your API key in Settings > Preferences > AI; **No AI** removes every AI control. See [`ai.md`](Documentation/ai.md).
 
 ### Themes
 Stock presets: **GitHub, Windows 11, Warm** (each with a Dark variant), **VS Code Light/Dark**, **Glass Light/Dark**, **TTY, opencode, Gruvbox, Nord, Catppuccin**. Create your own as `.jsonc` files or with the in-app theme editor.

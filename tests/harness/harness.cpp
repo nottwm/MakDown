@@ -473,8 +473,29 @@ static QJsonObject handle(const QJsonObject& q) {
         r["fakeAt"] = Ai::inventedResultAt(q["text"].toString());
     } else if (cmd == "ai_prompt") {
         Ai::PromptContext pc; pc.workDir = q["workDir"].toString(); pc.openFile = q["openFile"].toString(); pc.custom = q["custom"].toString();
-        pc.os = "TestOS"; pc.shell = "/bin/sh";
+        pc.os = "TestOS"; pc.shell = "/bin/sh"; pc.web = q["web"].toBool(true);
         r["prompt"] = Ai::systemPrompt(pc); r["base"] = Ai::basePrompt();
+    } else if (cmd == "ai_web") {                     // the pure parts of web_search / web_fetch
+        const QString op = q["op"].toString();
+        qunsetenv("MAKDOWN_WEB_ALLOW_LOCAL"); qunsetenv("MAKDOWN_WEB_SEARCH_URL");
+        if (q["allowLocal"].toBool()) qputenv("MAKDOWN_WEB_ALLOW_LOCAL", "1");
+        if (op == "url") {
+            QString err; r["allowed"] = Ai::checkFetchUrl(QUrl(q["url"].toString()), &err); r["error"] = err;
+        } else if (op == "public") {
+            r["public"] = Ai::isPublicAddress(QHostAddress(q["ip"].toString()));
+        } else if (op == "search") {
+            QJsonArray a;
+            for (const Ai::SearchHit& h : Ai::parseSearchResults(q["html"].toString(), q["max"].toInt(8))) a << QJsonObject{{"title", h.title}, {"url", h.url}, {"snippet", h.snippet}};
+            r["hits"] = a; r["challenge"] = Ai::looksLikeChallengePage(q["html"].toString());
+        } else if (op == "searchUrl") {
+            r["url"] = Ai::searchUrl(q["query"].toString()).toString(QUrl::FullyEncoded);
+        } else if (op == "html") {
+            r["text"] = Ai::htmlToText(q["html"].toString(), QUrl(q["base"].toString()));
+        } else if (op == "decode") {
+            r["text"] = Ai::decodeBody(QByteArray::fromBase64(q["b64"].toString().toLatin1()), q["contentType"].toString());
+        } else if (op == "entities") {
+            r["text"] = Ai::decodeEntities(q["text"].toString());
+        }
     } else if (cmd == "ai_resolve") {
         QString err; const QString p = Ai::resolveInside(q["root"].toString(), q["path"].toString(), &err);
         r["path"] = p; r["error"] = err;
@@ -491,11 +512,12 @@ static QJsonObject handle(const QJsonObject& q) {
         c.provider = q["provider"].toString("openai"); c.customPrompt = q["prompt"].toString();
         c.per[c.provider].apiKey = q["key"].toString(); c.per[c.provider].model = q["model"].toString();
         c.confirmCommands = q["confirmCommands"].toBool(true); c.maxSteps = q["maxSteps"].toInt(25);
+        c.web = q["web"].toBool(true); c.confirmWeb = q["confirmWeb"].toBool(true);
         c.showThinking = q["showThinking"].toBool(true); c.thinkingBudget = q["thinkingBudget"].toInt(0);
         Ai::saveConfig();
         c = Ai::Config(); Ai::loadConfig();
         r["provider"] = c.provider; r["prompt"] = c.customPrompt; r["key"] = c.per[c.provider].apiKey; r["model"] = c.model(c.provider);
-        r["confirmCommands"] = c.confirmCommands; r["maxSteps"] = c.maxSteps; r["showThinking"] = c.showThinking; r["thinkingBudget"] = c.thinkingBudget; r["path"] = Ai::configPath();
+        r["web"] = c.web; r["confirmWeb"] = c.confirmWeb; r["confirmCommands"] = c.confirmCommands; r["maxSteps"] = c.maxSteps; r["showThinking"] = c.showThinking; r["thinkingBudget"] = c.thinkingBudget; r["path"] = Ai::configPath();
     } else if (cmd == "ai_chat") {                    // a real AiPanel talking to a (mock) server; one send() per entry of "messages"
         Ai::Config& c = Ai::config();
         c = Ai::Config();
@@ -504,6 +526,9 @@ static QJsonObject handle(const QJsonObject& q) {
         c.per[c.provider].baseUrl = cfg["baseUrl"].toString(); c.per[c.provider].apiKey = cfg["key"].toString("k"); c.per[c.provider].model = cfg["model"].toString("test-model");
         c.customPrompt = cfg["customPrompt"].toString();
         c.confirmFiles = cfg["confirmFiles"].toBool(false); c.confirmCommands = cfg["confirmCommands"].toBool(false);
+        c.web = cfg["web"].toBool(true); c.confirmWeb = cfg["confirmWeb"].toBool(false);
+        const QJsonObject envo = q["env"].toObject();             // web tests: where the search engine is, may local addresses be opened
+        for (const char* k : {"MAKDOWN_WEB_SEARCH_URL", "MAKDOWN_WEB_ALLOW_LOCAL"}) { if (envo.contains(k)) qputenv(k, envo[k].toString().toUtf8()); else qunsetenv(k); }
         c.maxSteps = cfg["maxSteps"].toInt(25);
         c.showThinking = cfg["showThinking"].toBool(true); c.thinkingBudget = cfg["thinkingBudget"].toInt(); c.stream = cfg["stream"].toBool(true);
         g_clickButton = q["click"].toString(); g_fillText = q["fill"].toString();

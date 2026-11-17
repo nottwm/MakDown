@@ -87,6 +87,10 @@ private:
     QString runShell(const QString& command, int timeoutMs, bool* timedOut, int* exitCode);
     bool confirm(const QString& what, const QString& detail, bool* sessionFlag, bool defaultAllow);
     QString askUser(const QString& question, const QStringList& options, bool* answered);
+    // One GET for web_search / web_fetch: redirects are followed by hand and every hop is checked (Ai::checkFetchUrl and the
+    // addresses the name resolves to), the size and the time are limited and Stop cancels it. `trusted` skips the local-address checks.
+    bool webGet(const QUrl& start, bool trusted, QByteArray* body, QString* contentType, QUrl* finalUrl, bool* truncated, QString* error);
+    bool hostIsPublic(const QString& host, QString* error);
     int addEntry(Entry::Kind k, const QString& text, const QString& title = QString(), const QString& status = QString(), bool expanded = false);
     void onData();                                       // streamed bytes arrived
     void flushLive();                                    // show what the stream has so far (thinking card, answer)
@@ -114,7 +118,7 @@ private:
     QList<Entry> entries_;
     QList<Ai::Message> history_;
     bool busy_ = false, cancelled_ = false;
-    bool sessionFiles_ = false, sessionCommands_ = false;     // "always allow this session"
+    bool sessionFiles_ = false, sessionCommands_ = false, sessionWeb_ = false;     // "always allow this session"
     int steps_ = 0;
 
     QNetworkAccessManager* nam_ = nullptr;

@@ -5,7 +5,7 @@
 
 static const char* const kLangen = R"JSON({
   "name": "English",
-  "revision": 6,
+  "revision": 7,
   "builtin": true,
   "plural": "one_other",
   "strings": {
@@ -426,14 +426,21 @@ static const char* const kLangen = R"JSON({
     "ai.preparing": "Preparing an action",
     "ai.set.stream": "Stream replies",
     "ai.set.streamHint": "Shows the thinking and the answer while the model writes them. Turn it off for a server that cannot stream (MakDown also copes by itself when a server answers in one piece).",
-    "ai.preparingDetail": "Preparing an action: %1 (%2)"
+    "ai.preparingDetail": "Preparing an action: %1 (%2)",
+    "ai.confirm.search": "The assistant wants to search the web for:\n\n%1",
+    "ai.confirm.fetch": "The assistant wants to download this web page:\n\n%1",
+    "ai.set.web": "Let the AI search the web and read web pages",
+    "ai.set.webHint": "Adds the tools web_search and web_fetch. The search words and the addresses the model picks are sent to DuckDuckGo and to the sites it opens; the pages it reads go to your AI provider. Off: the model is told it has no web access.",
+    "ai.set.confirmWeb": "Ask before the AI searches the web or opens a page",
+    "ai.searching": "Searching the web",
+    "ai.fetching": "Reading the page"
   }
 }
 )JSON";
 
 static const char* const kLangpl = R"JSON({
   "name": "Polski",
-  "revision": 6,
+  "revision": 7,
   "builtin": true,
   "plural": "polish",
   "strings": {
@@ -856,14 +863,21 @@ static const char* const kLangpl = R"JSON({
     "ai.preparing": "Przygotowuję akcję",
     "ai.set.stream": "Odpowiedzi strumieniowe",
     "ai.set.streamHint": "Pokazuje rozumowanie i odpowiedź na bieżąco, gdy model je pisze. Wyłącz dla serwera bez strumieniowania (MakDown radzi sobie też sam, gdy serwer odpowiada w całości).",
-    "ai.preparingDetail": "Przygotowuję akcję: %1 (%2)"
+    "ai.preparingDetail": "Przygotowuję akcję: %1 (%2)",
+    "ai.confirm.search": "Asystent chce wyszukać w internecie:\n\n%1",
+    "ai.confirm.fetch": "Asystent chce pobrać tę stronę internetową:\n\n%1",
+    "ai.set.web": "Pozwól AI przeszukiwać internet i czytać strony",
+    "ai.set.webHint": "Dodaje narzędzia web_search i web_fetch. Hasła wyszukiwania i adresy wybrane przez model trafiają do DuckDuckGo oraz do otwieranych stron; przeczytane strony trafiają do Twojego dostawcy AI. Wyłączone: model dowiaduje się, że nie ma dostępu do internetu.",
+    "ai.set.confirmWeb": "Pytaj, zanim AI przeszuka internet lub otworzy stronę",
+    "ai.searching": "Szukam w internecie",
+    "ai.fetching": "Czytam stronę"
   }
 }
 )JSON";
 
 static const char* const kLangru = R"JSON({
   "name": "Русский",
-  "revision": 6,
+  "revision": 7,
   "builtin": true,
   "plural": "east_slavic",
   "strings": {
@@ -1286,7 +1300,14 @@ static const char* const kLangru = R"JSON({
     "ai.preparing": "Готовлю действие",
     "ai.set.stream": "Потоковые ответы",
     "ai.set.streamHint": "Показывает размышления и ответ по мере того, как модель их пишет. Отключите для сервера без потоковой передачи (MakDown справляется и сам, если сервер отвечает целиком).",
-    "ai.preparingDetail": "Готовлю действие: %1 (%2)"
+    "ai.preparingDetail": "Готовлю действие: %1 (%2)",
+    "ai.confirm.search": "Ассистент хочет найти в интернете:\n\n%1",
+    "ai.confirm.fetch": "Ассистент хочет загрузить эту веб-страницу:\n\n%1",
+    "ai.set.web": "Разрешить AI искать в интернете и читать веб-страницы",
+    "ai.set.webHint": "Добавляет инструменты web_search и web_fetch. Поисковые запросы и адреса, выбранные моделью, отправляются в DuckDuckGo и на открываемые сайты; прочитанные страницы передаются вашему провайдеру AI. Если выключено, модель узнаёт, что доступа в интернет нет.",
+    "ai.set.confirmWeb": "Спрашивать, прежде чем AI ищет в интернете или открывает страницу",
+    "ai.searching": "Ищу в интернете",
+    "ai.fetching": "Читаю страницу"
   }
 }
 )JSON";

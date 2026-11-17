@@ -826,7 +826,8 @@ QString AiPanel::runTool(const Ai::ToolCall& c, bool* endBatch) {
     // ---- web_search
     if (name == "web_search") {
         const QString q = arg("query").trimmed(), title = name + " \u00b7 " + q;
-        if (q.isEmpty()) return done("error", "needs <query>");
+        if (q.isEmpty()) return done("error", "no search words received" + (c.args.isEmpty() ? QString() : " (parameters seen: <" + c.args.keys().join(">, <") + ">)")
+                                                + ". Write exactly: <makdown_tool name=\"web_search\"><query>your search words</query></makdown_tool>");
         if (!cfg.web) return done("error", "web access is switched off in MakDown's settings (Settings > Preferences > AI). Tell the user if you need it.", title);
         if (q.size() > 400) return done("error", "the query is too long (400 characters at most): use a few key words", title);
         if (cfg.confirmWeb && !confirm(L("ai.confirm.search").arg(q), QString(), &sessionWeb_, true))
@@ -849,7 +850,8 @@ QString AiPanel::runTool(const Ai::ToolCall& c, bool* endBatch) {
     // ---- web_fetch
     if (name == "web_fetch") {
         const QString raw = arg("url").trimmed(), title = name + " \u00b7 " + raw;
-        if (raw.isEmpty()) return done("error", "needs <url>");
+        if (raw.isEmpty()) return done("error", "no address received" + (c.args.isEmpty() ? QString() : " (parameters seen: <" + c.args.keys().join(">, <") + ">)")
+                                                 + ". Write exactly: <makdown_tool name=\"web_fetch\"><url>https://example.com/page</url></makdown_tool>");
         if (!cfg.web) return done("error", "web access is switched off in MakDown's settings (Settings > Preferences > AI). Tell the user if you need it.", title);
         QUrl url(raw.contains("://") ? raw : "https://" + raw);
         QString err;

@@ -1189,6 +1189,20 @@ class TestWebPure(AiCase):
         self.assertEqual(r["calls"][1]["args"], {"url": "https://example.com/a?b=1&c=2", "start": "20000"})
         self.assertEqual([c["error"] for c in r["calls"]], ["", ""])
 
+    def test_web_tool_blocks_written_loosely_are_still_understood(self):
+        def args(reply):
+            return [c["args"] for c in self.call("ai_parse", reply=reply)["calls"]]
+        mk = lambda name, inner, attrs="": f'<makdown_tool name="{name}"{attrs}>{inner}</makdown_tool>'
+        self.assertEqual(args(mk("web_search", "<q>rust async</q>")), [{"q": "rust async", "query": "rust async"}])
+        self.assertEqual(args(mk("web_search", "<search_query> a b </search_query>"))[0]["query"], "a b")
+        self.assertEqual(args(mk("web_search", "  just the words  "))[0]["query"], "just the words")
+        self.assertEqual(args(mk("web_search", "", ' query="from attribute"'))[0]["query"], "from attribute")
+        self.assertEqual(args(mk("web_fetch", "<link>https://example.com/x</link>"))[0]["url"], "https://example.com/x")
+        self.assertEqual(args(mk("web_fetch", "https://example.com/y"))[0]["url"], "https://example.com/y")
+        self.assertEqual(args(mk("web_search", "<query>exact</query>"))[0], {"query": "exact"}, "the right form is untouched")
+        self.assertNotIn("query", args(mk("web_search", "<unrelated>x</unrelated>"))[0], "unknown tags are not guessed at")
+        self.assertNotIn("path", args(mk("read_file", "plain words")) [0], "other tools are not loosened")
+
     def test_settings_round_trip(self):
         h = Harness()
         try:
@@ -1364,6 +1378,12 @@ class TestWebTools(AgentBase):
         m = self.mock(tool("web_fetch", url=w.base + "/empty"), "ok")
         self.chat(m, "go", env=self.env(w))
         self.assertIn("no readable text", m.last_user_text())
+
+    def test_empty_web_calls_say_what_was_seen_and_how_to_write_it(self):
+        m = self.mock(tool("web_search", unrelated="x"), "ok")
+        self.chat(m, "go")
+        last = m.last_user_text()
+        self.assertIn("parameters seen: <unrelated>", last); self.assertIn("<query>your search words</query>", last)
 
     def test_missing_parameters(self):
         m = self.mock(tool("web_search", query="  ") + tool("web_fetch", url=""), "ok")

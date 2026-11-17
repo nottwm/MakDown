@@ -553,6 +553,30 @@ static void parseParams(const QString& body, ToolCall* call) {
     }
 }
 
+// Models do not always write a web tool exactly as taught: <q>..</q>, <search_query>..</search_query>, an attribute on the
+// opening tag, or just the words inside the block. Accept those, so a search is not lost to a spelling of the tag.
+static void normalizeWebArgs(const QString& openTag, const QString& body, ToolCall* call) {
+    const bool search = call->name == "web_search", fetch = call->name == "web_fetch";
+    if (!search && !fetch) return;
+    const QString want = search ? "query" : "url";
+    if (!call->args.value(want).trimmed().isEmpty()) return;
+    static const QRegularExpression attrRe("([A-Za-z_][A-Za-z0-9_]*)\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)')");
+    QMap<QString, QString> all = call->args;
+    for (QRegularExpressionMatchIterator it = attrRe.globalMatch(openTag); it.hasNext();) {
+        const QRegularExpressionMatch m = it.next();
+        if (m.captured(1) != "name") all.insert(m.captured(1), m.captured(2).isNull() ? m.captured(3) : m.captured(2));
+    }
+    const QStringList aliases = search ? QStringList{"query", "q", "search_query", "search", "keywords", "keyword", "term", "terms", "text", "input"}
+                                       : QStringList{"url", "link", "address", "href", "uri", "page", "site", "text", "input"};
+    for (const QString& k : aliases)
+        if (!all.value(k).trimmed().isEmpty()) { call->args.insert(want, all.value(k).trimmed()); call->error.clear(); return; }
+    static const QRegularExpression anyTag("</?[A-Za-z][^>]*>");
+    QString plain = body;
+    plain.remove(anyTag);
+    plain = plain.trimmed();
+    if (call->args.isEmpty() && !plain.isEmpty()) { call->args.insert(want, plain); return; }       // only words, no tags
+}
+
 Parsed parseToolCalls(const QString& reply) {
     Parsed out;
     const QString kOpen = "<makdown_tool", kClose = "</makdown_tool>";
@@ -575,6 +599,7 @@ Parsed parseToolCalls(const QString& reply) {
             break;
         }
         if (call.error.isEmpty()) parseParams(reply.mid(gt + 1, e - gt - 1), &call);
+        normalizeWebArgs(reply.mid(s, gt - s), reply.mid(gt + 1, e - gt - 1), &call);
         out.calls << call;
         pos = e + kClose.size();
     }

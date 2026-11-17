@@ -11,8 +11,8 @@ sys.path.insert(0, str(Path(__file__).parent))
 from lib.common import ROOT, Harness, HarnessCase, read, strip_jsonc
 
 HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
-CHROMES = {"github", "win11", "terminal", "warm", "vscode", "glass", "plain"}
-STOCK = ["GitHub", "GitHub Dark", "Windows 11", "Windows 11 Dark", "TTY", "opencode", "Warm Light", "Warm Dark", "Gruvbox", "Nord",
+CHROMES = {"makdown", "github", "win11", "terminal", "warm", "vscode", "glass", "plain"}
+STOCK = ["MakDown", "MakDown Dark", "GitHub", "GitHub Dark", "Windows 11", "Windows 11 Dark", "TTY", "opencode", "Warm Light", "Warm Dark", "Gruvbox", "Nord",
          "Catppuccin", "VS Code Light", "VS Code Dark", "Glass Light", "Glass Dark"]
 
 
@@ -40,6 +40,7 @@ class TestStockThemes(HarnessCase):
 
     def test_default_theme_exists(self):
         self.assertIn("GitHub", self.themes)
+        self.assertIn("MakDown", self.themes)
 
     def test_every_colour_key_is_a_valid_hex_colour(self):
         for n, t in self.themes.items():
@@ -124,6 +125,90 @@ class TestStockThemes(HarnessCase):
         for n, t in self.themes.items():
             again = self.call("theme_from_json", theme=t)["theme"]
             self.assertEqual(again, t, f"{n} changes after toJson -> fromJson -> toJson")
+
+
+class TestMakDownStyle(HarnessCase):
+    """The house style: paper and ink, comfortable (not maximal) contrast, one calm accent, flat and quiet."""
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.themes = {t["name"]: t for t in cls.h.call("stock_themes")["themes"]}
+        cls.pair = [cls.themes["MakDown"], cls.themes["MakDown Dark"]]
+
+    def test_light_and_dark_variants_share_the_style(self):
+        light, dark = self.pair
+        self.assertFalse(light["dark"]); self.assertTrue(dark["dark"])
+        for t in self.pair:
+            self.assertEqual(t["chrome"], "makdown")
+            self.assertEqual(t["shape"]["cornerRadius"], 6)
+            self.assertFalse(t["shape"]["headingRules"])
+            self.assertEqual(t["shape"]["pageWidth"], 740)
+        self.assertEqual(light["fonts"]["preview"], dark["fonts"]["preview"])
+
+    def test_never_pure_white_or_black(self):
+        for t in self.pair:
+            for k in ("bg", "panel", "editorBg", "fg", "editorFg", "heading", "codeBg"):
+                self.assertNotIn(t["colors"][k].lower(), ("#ffffff", "#000000"), f"{t['name']}.{k}")
+
+    def test_body_text_is_comfortable_not_glaring(self):
+        for t in self.pair:
+            c = t["colors"]
+            for bg in ("bg", "editorBg", "panel"):
+                r = contrast(c["fg"], c[bg])
+                self.assertTrue(8.0 <= r <= 14.0, f"{t['name']}: fg on {bg} = {r:.1f}:1 (want 8-14)")
+
+    def test_secondary_text_meets_aa(self):
+        for t in self.pair:
+            c = t["colors"]
+            for fg, bg in (("muted", "bg"), ("muted", "panel"), ("muted", "editorBg"), ("link", "editorBg"), ("link", "panel"),
+                           ("accent", "bg"), ("accent", "editorBg"), ("accentFg", "accent"), ("codeFg", "codeBg"), ("codeFg", "editorBg")):
+                self.assertGreaterEqual(contrast(c[fg], c[bg]), 4.5, f"{t['name']}: {fg} on {bg}")
+
+    def test_selection_is_a_soft_tint_with_readable_text(self):
+        for t in self.pair:
+            c = t["colors"]
+            self.assertGreaterEqual(contrast(c["fg"], c["selection"]), 6.0, t["name"])
+            self.assertGreater(contrast(c["selection"], c["panel"]), 1.15, f"{t['name']}: selected rows must show up on the panel")
+            self.assertGreater(contrast(c["selection"], c["editorBg"]), 1.3, t["name"])
+
+    def test_surfaces_are_separated_by_a_hairline_not_a_wall(self):
+        for t in self.pair:
+            c = t["colors"]
+            self.assertTrue(1.2 <= contrast(c["border"], c["bg"]) <= 2.0, f"{t['name']}: border on bg")
+
+    def test_accent_is_not_a_saturated_neon(self):
+        import colorsys
+        for t in self.pair:
+            h = t["colors"]["accent"]
+            r, g, b = (int(h[i:i + 2], 16) / 255 for i in (1, 3, 5))
+            _, _, s_ = colorsys.rgb_to_hls(r, g, b)
+            self.assertLess(s_, 0.5, f"{t['name']}: accent {h} is too saturated")
+
+    def test_warm_neutrals_in_light_and_cool_charcoal_in_dark(self):
+        light, dark = self.pair
+        r, g, b = (int(light["colors"]["bg"][i:i + 2], 16) for i in (1, 3, 5))
+        self.assertTrue(r > g > b, "paper is warm: red > green > blue")
+        r, g, b = (int(dark["colors"]["bg"][i:i + 2], 16) for i in (1, 3, 5))
+        self.assertTrue(b >= r and max(r, g, b) < 0x40, "the dark theme is a soft charcoal, nowhere near black or white")
+
+    def test_reading_serif_in_the_preview_and_plain_ui(self):
+        for t in self.pair:
+            self.assertIn("Georgia", t["fonts"]["preview"])
+            self.assertTrue(t["fonts"]["preview"].endswith("serif"))
+            self.assertNotIn("serif", t["fonts"]["ui"].replace("sans-serif", ""))
+            self.assertTrue(t["fonts"]["editor"].endswith("monospace"))
+
+    def test_stylesheet_has_no_gradients_or_translucency_and_soft_selection(self):
+        for n in ("MakDown", "MakDown Dark"):
+            qss = self.call("stylesheet", theme=n)["qss"]
+            self.assertNotIn("qlineargradient", qss); self.assertNotIn("rgba(", qss)
+            t = self.themes[n]
+            self.assertIn("QMenu::item:selected { background: " + t["colors"]["selection"], qss, f"{n}: menus use the soft tint")
+
+    def test_preview_reads_like_a_page(self):
+        css = self.call("css", theme="MakDown")["css"]
+        self.assertIn("line-height:140%", css); self.assertIn("margin-bottom:13px", css)
+        self.assertNotIn("line-height", self.call("css", theme="GitHub")["css"], "other themes keep their own spacing")
 
 
 class TestStyleSheet(HarnessCase):
@@ -415,7 +500,7 @@ class TestSettings(unittest.TestCase):
     def test_defaults_when_no_file(self):
         s = self.load()
         self.assertEqual((s["theme"], s["vim"], s["lineNumbers"], s["tabWidth"], s["viewMode"], s["animations"]),
-                         ("GitHub", False, True, 4, 1, 2))
+                         ("MakDown", False, True, 4, 1, 2))
         self.assertTrue(s["wrap"] and s["explorer"] and s["liveReload"] and s["customFrame"])
         self.assertFalse(s["console"])
 

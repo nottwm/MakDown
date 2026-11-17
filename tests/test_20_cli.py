@@ -104,7 +104,7 @@ class TestStartup(unittest.TestCase):
             alive, rc, out, err, _ = self.run_for([], home=home)
             self.assertTrue(alive)
             data = Path(home) / ".local/share/MakDown"
-            self.assertEqual(len(list((data / "presets").glob("*.jsonc"))), 15)
+            self.assertEqual(len(list((data / "presets").glob("*.jsonc"))), 17)
             self.assertEqual(len(list((data / "syntax").glob("*.json"))), 11)
         finally:
             shutil.rmtree(home, ignore_errors=True)

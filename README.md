@@ -82,7 +82,7 @@ Editable JSON packs for **C, C++, Makefile, linker scripts, Rust, Bash, Batch, H
 A chat page in the side bar (`Ctrl+Shift+A`) for Anthropic, OpenAI, OpenRouter, DeepSeek, Hugging Face, OpenCode Zen / Go or any OpenAI compatible server. It can create files, read your project, run terminal commands, search the web and read pages (each with your approval) and ask you questions through built-in tools. Add a custom prompt and your API key in Settings > Preferences > AI; **No AI** removes every AI control. See [`ai.md`](Documentation/ai.md).
 
 ### Themes
-Stock presets: **GitHub, Windows 11, Warm** (each with a Dark variant), **VS Code Light/Dark**, **Glass Light/Dark**, **TTY, opencode, Gruvbox, Nord, Catppuccin**. Create your own as `.jsonc` files or with the in-app theme editor.
+Stock presets: **MakDown** (the default: paper and ink, a pine-green accent, a reading serif; with a Dark variant), **GitHub, Windows 11, Warm** (each with a Dark variant), **VS Code Light/Dark**, **Glass Light/Dark**, **TTY, opencode, Gruvbox, Nord, Catppuccin**. Create your own as `.jsonc` files or with the in-app theme editor.
 
 ### Interface languages
 **English, Russian and Polish** out of the box, picked in Settings > Language (default: follow the OS language). Languages are plain `.json` files, so adding another one means copying `en.json` and translating it. See [`languages.md`](Documentation/languages.md).
@@ -251,7 +251,7 @@ You can customise:
 - Colours (missing keys are derived automatically)
 - Fonts and sizes (UI, editor, preview, code)
 - UI corner radius, code-block style, heading rules, document page width
-- **Chrome flavour** (overall app layout): `github`, `win11`, `terminal`, `warm`, `vscode`, `glass`, `plain`
+- **Chrome flavour** (overall app layout): `makdown`, `github`, `win11`, `terminal`, `warm`, `vscode`, `glass`, `plain`
 
 Minimal example:
 

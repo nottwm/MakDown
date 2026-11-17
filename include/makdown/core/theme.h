@@ -1,7 +1,7 @@
 // theme.h - everything about THEMES (presets) and persisted APP SETTINGS.
 //
 //  * A Theme describes colours, fonts, corner radius, code-block styling and
-//    which "chrome" (app layout flavour: GitHub / Win11 / Terminal / Warm / VS Code / Liquid Glass / plain) to use.
+//    which "chrome" (app layout flavour: MakDown / GitHub / Win11 / Terminal / Warm / VS Code / Liquid Glass / plain) to use.
 //  * Themes live on disk as .jsonc files (JSON with // comments) inside the presets folder:
 //        Windows   : %USERPROFILE%\AppData\Local\MakDown\presets
 //        Linux/mac : ~/.local/share/MakDown/presets
@@ -19,7 +19,7 @@ struct Theme {
     int     revision = 0;               // stock preset revision (see kStockRevision in theme.cpp)
     bool    builtin = false;            // stock presets are read-only in the UI (clone them to edit)
     bool    dark    = false;            // informational only
-    QString chrome  = "plain";          // layout flavour: github | win11 | terminal | warm | vscode | glass | plain
+    QString chrome  = "plain";          // layout flavour: makdown | github | win11 | terminal | warm | vscode | glass | plain
 
     // Named colours, "#rrggbb". See ThemeStore::colorKeys() for the full list.
     QMap<QString, QString> colors;
@@ -63,7 +63,7 @@ namespace ThemeStore {
 
 // Persisted user settings (not part of a theme). Stored as <home>/settings.jsonc
 struct AppSettings {
-    QString theme = "GitHub";
+    QString theme = "MakDown";
     QString language = "auto";    // interface language: "auto" (follow the OS) or a code from <home>/lang (see core/lang.h)
     bool vim = false;              // "vimkeys": vim modal editing + extra hotkeys
     bool lineNumbers = true;

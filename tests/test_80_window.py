@@ -168,7 +168,7 @@ class TestSettingsAppliedAtStartup(WindowCase):
     def test_every_theme_and_view_mode(self):
         data = Path(self.h.home) / ".local/share/MakDown"
         data.mkdir(parents=True)
-        for theme in ("GitHub", "TTY", "Glass Dark", "Warm Light", "Windows 11 Dark"):
+        for theme in ("MakDown", "MakDown Dark", "GitHub", "TTY", "Glass Dark", "Warm Light", "Windows 11 Dark"):
             for view in (0, 1, 2, 3):
                 (data / "settings.jsonc").write_text(json.dumps({"theme": theme, "viewMode": view, "animations": 0}))
                 r = self.call("win_open", file=str(FIXTURES / "kitchen-sink.md"), wait=250)

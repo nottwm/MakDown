@@ -437,7 +437,7 @@ void MainWindow::buildChrome() {
     const QString ch = theme_.chrome;
     const QString name = (file_.isEmpty() ? QString("untitled.md") : QFileInfo(file_).fileName()).toHtmlEscaped();
     const QString accent = theme_.color("accent"), muted = theme_.color("muted"), link = theme_.color("link");
-    hl->setContentsMargins(16, ch == "warm" ? 14 : (ch == "terminal" ? 4 : 8), 16, ch == "warm" ? 14 : (ch == "terminal" ? 4 : 8));
+    hl->setContentsMargins(16, ch == "warm" || ch == "makdown" ? 12 : (ch == "terminal" ? 4 : 8), 16, ch == "warm" || ch == "makdown" ? 12 : (ch == "terminal" ? 4 : 8));
     hl->setSpacing(8);
 
     auto label = [&](const QString& html) {
@@ -457,6 +457,9 @@ void MainWindow::buildChrome() {
         label(QString("<span style='color:%1; font-size:13pt'>&#9673;</span>&nbsp; <b>%2</b> <span style='color:%3'>&mdash; MakDown</span>").arg(accent, name, muted));
     } else if (ch == "terminal") {           // a shell prompt
         label(QString("<span style='color:%1'><b>$</b></span> makdown <span style='color:%2'>--open</span> %3").arg(accent, muted, name));
+    } else if (ch == "makdown") {          // a quiet masthead: the name in the reading serif, the file beside it
+        label(QString("<span style=\"font-family:%1; font-size:15pt; color:%2\">MakDown</span>&nbsp;&nbsp;<span style='color:%3'>&middot;</span>&nbsp;&nbsp;%4")
+                  .arg(ThemeStore::cssFamily(theme_.previewFont, '\''), theme_.color("heading"), muted, name));
     } else if (ch == "warm") {             // warm, spacious masthead
         label(QString("<span style=\"font-family:%1; font-size:16pt\">MakDown</span>&nbsp;&nbsp;"
                       "<span style='color:%2'>%3</span>").arg(ThemeStore::cssFamily(theme_.previewFont, '\''), muted, name));

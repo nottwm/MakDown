@@ -143,7 +143,7 @@ QWidget* SettingsDialog::buildAppearancePage() {
     auto* form = new QFormLayout; form->setHorizontalSpacing(14); form->setVerticalSpacing(8);
 
     chromeCombo_ = new QComboBox;
-    chromeCombo_->addItem(L("chrome.plain"), "plain"); chromeCombo_->addItem("GitHub", "github"); chromeCombo_->addItem("Windows 11", "win11");
+    chromeCombo_->addItem("MakDown", "makdown"); chromeCombo_->addItem(L("chrome.plain"), "plain"); chromeCombo_->addItem("GitHub", "github"); chromeCombo_->addItem("Windows 11", "win11");
     chromeCombo_->addItem(L("chrome.terminal"), "terminal"); chromeCombo_->addItem(L("chrome.warm"), "warm");
     chromeCombo_->addItem("VS Code", "vscode"); chromeCombo_->addItem("Glass", "glass");
     form->addRow(L("theme.layout"), chromeCombo_);
@@ -402,7 +402,7 @@ void SettingsDialog::deleteCurrent() {
     if (QMessageBox::question(this, L("dlg.deletePreset.title"), L("dlg.deletePreset.text").arg(t->name)) != QMessageBox::Yes) return;
     ThemeStore::remove(*t);
     themes_ = ThemeStore::loadAll();
-    s_.theme = "GitHub";
+    s_.theme = "MakDown";
     rebuildThemeCombo(); loadThemeIntoControls(); emit applied();
 }
 

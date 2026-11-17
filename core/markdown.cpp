@@ -314,7 +314,11 @@ QString renderMarkdownToHtml(const QString& markdown, const Theme& theme, bool r
 
 QString previewCss(const Theme& t) {
     const double s = t.previewSize;
-    return QString(
+    // the MakDown style reads like a book page: looser lines, a little more air between paragraphs and above headings
+    const QString comfort = t.chrome == "makdown"
+        ? QStringLiteral("p, li { line-height:140%; } p { margin-bottom:13px; } h1, h2 { margin-top:26px; } h1, h2, h3 { letter-spacing:0px; } blockquote { margin-top:6px; margin-bottom:6px; }")
+        : QString();
+    return comfort + QString(
         "body { color:%1; font-family:%2; font-size:%3pt; }"
         "a { color:%4; text-decoration:none; }"
         "h1,h2,h3,h4,h5,h6 { color:%5; font-weight:600; margin-top:18px; margin-bottom:8px; }"

@@ -45,6 +45,8 @@ static const int kStockRevision = 3;
 #define VSMONO  "Consolas, Menlo, Droid Sans Mono, DejaVu Sans Mono, monospace"
 #define GLASSSANS "SF Pro Display, SF Pro Text, -apple-system, Segoe UI Variable, Segoe UI, Inter, Noto Sans, Helvetica Neue, Arial, sans-serif"
 #define MONO  "JetBrains Mono, Cascadia Code, Consolas, Menlo, DejaVu Sans Mono, monospace"
+// MakDown's own reading face: a book serif that every desktop has some version of (Georgia, Charter, Noto/DejaVu Serif).
+#define READSERIF "Source Serif 4, Charter, Georgia, Noto Serif, DejaVu Serif, Times New Roman, serif"
 
 // One row of the stock-palette table.
 struct Pal {
@@ -57,6 +59,10 @@ struct Pal {
 
 const Pal kPalettes[] = {
  // name        chrome      dark   bg         panel      fg         muted      border     accent     accentFg   editorBg   codeBg     codeFg     link       quote      heading    selection   ui     editor  preview  r  border rules ui  width
+ // MakDown: paper and ink. Warm off-white / soft charcoal instead of pure white / black, body text at about 10-12:1 (comfortable, not glaring),
+ // one calm accent (pine green on paper, sage on charcoal), a book serif for reading and plain sans for the interface.
+ {"MakDown",     "makdown",  false, "#f3f0e8","#e9e5db","#2a2d32","#5e6369","#d3cebf","#2f6f5e","#ffffff","#faf8f3","#eeeade","#7d3b2c","#2b5f8e","#c2bba9","#1f3447","#bcd8c8", SANS, MONO, READSERIF, 6, true,  false, 10, 740},
+ {"MakDown Dark","makdown",  true,  "#202427","#292e32","#d8d5cc","#989d94","#3a4045","#86bba4","#14201a","#1b1e20","#262b2e","#dcb98f","#8fb5d9","#454d53","#ece8de","#34493f", SANS, MONO, READSERIF, 6, true,  false, 10, 740},
  {"GitHub",     "github",   false, "#ffffff","#f6f8fa","#1f2328","#59636e","#d1d9e0","#0969da","#ffffff","#ffffff","#f6f8fa","#1f2328","#0969da","#d1d9e0","#1f2328","#b6e3ff", SANS, MONO, SANS,  6, true,  true, 10, 880},
  {"GitHub Dark","github",  true,  "#0d1117","#161b22","#e6edf3","#8b949e","#30363d","#1f6feb","#ffffff","#0d1117","#161b22","#e6edf3","#4493f8","#3d444d","#e6edf3","#1f3a5f", SANS, MONO, SANS,  6, true,  true, 10, 880},
  {"Windows 11", "win11",    false, "#f3f3f3","#fbfbfb","#1a1a1a","#616161","#e5e5e5","#0067c0","#ffffff","#ffffff","#f3f3f3","#1a1a1a","#0067c0","#0067c0","#1a1a1a","#cce4f7", "Segoe UI Variable, " SANS, MONO, "Segoe UI Variable, " SANS, 8, false, false, 10, 860},
@@ -239,7 +245,7 @@ bool ThemeStore::save(const Theme& t) {
     const QString header =
         "// MakDown preset: " + t.name + "\n"
         "// Plain JSON with comments (.jsonc). Edit freely - MakDown re-reads this folder on launch.\n"
-        "//   chrome : github | win11 | terminal | warm | vscode | glass | plain   (overall app layout flavour)\n"
+        "//   chrome : makdown | github | win11 | terminal | warm | vscode | glass | plain   (overall app layout flavour)\n"
         "//   colors : \"#rrggbb\" values;  fonts: comma separated fallback lists\n"
         "//   shape  : cornerRadius (px) for UI corners, code-block + page options, windowBorderWidth (0-6 px, Windows)\n"
         "// Set \"builtin\": false (or clone the preset in Settings) to edit a stock preset in the UI.\n";
@@ -433,6 +439,26 @@ QTabBar::tab:selected { color: @fg@; border-bottom: 2px solid @accent@; }
     } else if (t.chrome == "github") {
         q += QStringLiteral("QLabel#paneHeader { border-top: 1px solid @border@; font-weight: 600; color: @fg@; }"
                             "QToolButton { border: 1px solid @border@; } QToolButton:checked { background: @panel@; color: @fg@; border-color: @accent@; }");
+    } else if (t.chrome == "makdown") {        // paper and ink: flat surfaces, hairline borders, soft tinted selection instead of loud solid fills
+        q += QStringLiteral(
+            "QFrame#chromeBar, QStatusBar { background: @bg@; }"
+            "QLabel#paneHeader { background: @bg@; color: @muted@; padding: 7px 16px; }"
+            "QToolButton { padding: 5px 10px; }"
+            "QToolButton:hover { background: @panel@; border-color: @border@; }"
+            "QToolButton:checked { background: @selection@; color: @fg@; border: 1px solid transparent; }"
+            "QMenuBar::item:selected, QMenu::item:selected { background: @selection@; color: @fg@; }"
+            "QMenu { padding: 5px; }"
+            "QPushButton:hover { background: @bg@; border-color: @muted@; }"
+            "QPushButton:default:hover, QPushButton#primary:hover { background: @accent@; border-color: @fg@; }"
+            "QComboBox QAbstractItemView { selection-background-color: @selection@; selection-color: @fg@; }"
+            "QTreeView#explorer::item:selected, QTreeWidget#searchTree::item:selected, QListWidget#quickList::item:selected, QListWidget#nav::item:selected"
+            " { background: @selection@; color: @fg@; }"
+            "QTreeView#explorer::item:hover, QTreeWidget#searchTree::item:hover, QListWidget#quickList::item:hover, QListWidget#nav::item:hover { background: @panel@; }"
+            "QFrame#sideRail { background: @bg@; }"
+            "QTabBar { background: @bg@; }"
+            "QTabBar::tab { padding: 8px 16px; }"
+            "QScrollBar:vertical { width: 11px; } QScrollBar:horizontal { height: 11px; }"
+            "QToolTip { background: @fg@; color: @bg@; border: none; border-radius: @r2@px; padding: 5px 8px; }");
     } else if (t.chrome == "warm") {
         q += QStringLiteral("QToolButton { border-radius: @radius@px; padding: 5px 14px; }"
                             "QLabel#paneHeader { background: @bg@; border-bottom: none; padding-top: 12px; }"
